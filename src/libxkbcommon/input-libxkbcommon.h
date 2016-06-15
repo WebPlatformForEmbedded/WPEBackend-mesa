@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Igalia S.L.
+ * Copyright (C) 2015, 2016 Igalia S.L.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,29 +24,19 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef KeyboardEventHandler_h
-#define KeyboardEventHandler_h
+#ifndef wpe_mesa_input_libxkbcommon_h
+#define wpe_mesa_input_libxkbcommon_h
 
-#include "Events.h"
-#include <memory>
-#include <tuple>
+#include <wpe/input.h>
 
-namespace WPE {
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-namespace Input {
+extern struct wpe_input_key_mapper_interface libxkbcommon_input_key_mapper_interface;
 
-class KeyboardEventHandler {
-public:
-    static std::unique_ptr<KeyboardEventHandler> create();
+#ifdef __cplusplus
+}
+#endif
 
-    virtual ~KeyboardEventHandler() = default;
-
-    using Result = std::tuple<uint32_t, uint32_t, uint8_t>;
-    virtual Result handleKeyboardEvent(const KeyboardEvent::Raw&) = 0;
-};
-
-} // namespace Input
-
-} // namespace WPE
-
-#endif // KeyboardEventHandler_h
+#endif // wpe_mesa_input_libxkbcommon_h
