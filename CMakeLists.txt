@@ -15,9 +15,10 @@ find_package(LibDRM REQUIRED)
 find_package(Libxkbcommon 0.4.0 REQUIRED)
 find_package(Wayland 1.6.0 REQUIRED)
 find_package(WaylandCursor REQUIRED)
-find_package(WPE REQUIRED)
 add_definitions(-DWPE_BACKEND_DRM=1)
 add_definitions(-DWPE_BACKEND_WAYLAND=1)
+
+pkg_check_modules(WPE wpe REQUIRED)
 
 set(WPE_MESA_INCLUDE_DIRECTORIES
     "src/drm"
@@ -31,6 +32,7 @@ set(WPE_MESA_INCLUDE_DIRECTORIES
     ${LIBXKBCOMMON_INCLUDE_DIRS}
     ${WAYLAND_INCLUDE_DIRS}
     ${WAYLAND_CURSOR_INCLUDE_DIRS}
+    ${WPE_INCLUDE_DIRS}
 )
 set(WPE_MESA_LIBRARIES
     ${GIO_UNIX_LIBRARIES}
@@ -38,7 +40,7 @@ set(WPE_MESA_LIBRARIES
     ${LIBXKBCOMMON_LIBRARIES}
     ${WAYLAND_LIBRARIES}
     ${WAYLAND_CURSOR_LIBRARIES}
-    WPE
+    ${WPE_LIBRARIES}
 )
 set(WPE_MESA_SOURCES
     src/mesa.cpp
@@ -120,6 +122,7 @@ if (WPE_MESA_DRM_TEGRA_SUPPORT)
     add_definitions(-DWPE_BACKEND_DRM_TEGRA=1)
 endif ()
 
+link_directories(${WPE_LIBRARY_DIRS})
 add_library(WPE-mesa SHARED ${WPE_MESA_SOURCES})
 target_include_directories(WPE-mesa PRIVATE ${WPE_MESA_INCLUDE_DIRECTORIES})
 target_link_libraries(WPE-mesa ${WPE_MESA_LIBRARIES})
@@ -145,32 +148,10 @@ add_custom_command(TARGET WPE-mesa
 )
 install(FILES ${CMAKE_BINARY_DIR}/libWPE-backend.so DESTINATION lib)
 
-include(CMakePackageConfigHelpers)
-write_basic_package_version_file(
-  "${CMAKE_CURRENT_BINARY_DIR}/WPE-mesaConfigVersion.cmake"
-  VERSION ${WPE_MESA_VERSION}
-  COMPATIBILITY AnyNewerVersion
-)
-
-export(EXPORT WPE-mesaTargets
-  FILE "${CMAKE_CURRENT_BINARY_DIR}/WPETargets.cmake"
-)
-configure_file(WPE-mesaConfig.cmake
-  "${CMAKE_CURRENT_BINARY_DIR}/WPE-mesaConfig.cmake"
-  COPYONLY
-)
-
-set(ConfigPackageLocation lib/cmake/WPE-mesa)
-install(EXPORT WPE-mesaTargets
-  FILE
-    WPE-mesaTargets.cmake
-  DESTINATION
-  ${ConfigPackageLocation}
-)
+configure_file(wpe-mesa.pc.cmake wpe-mesa.pc @ONLY)
 install(
   FILES
-    WPE-mesaConfig.cmake
-    "${CMAKE_CURRENT_BINARY_DIR}/WPE-mesaConfigVersion.cmake"
-  DESTINATION
-    ${ConfigPackageLocation}
+    "${CMAKE_CURRENT_BINARY_DIR}/wpe-mesa.pc"
+    DESTINATION
+    lib/pkgconfig
 )
