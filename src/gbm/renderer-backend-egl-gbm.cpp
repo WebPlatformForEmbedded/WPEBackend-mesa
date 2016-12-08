@@ -101,6 +101,8 @@ struct EGLTarget : public IPC::Client::Handler {
             struct gbm_bo* bo = it->second;
             if (bo)
                 gbm_surface_release_buffer(surface, bo);
+
+            lockedBuffers.erase(it);
             break;
         }
         default:
