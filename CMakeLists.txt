@@ -123,16 +123,17 @@ if (WPE_MESA_DRM_TEGRA_SUPPORT)
 endif ()
 
 link_directories(${WPE_LIBRARY_DIRS})
-add_library(WPE-mesa SHARED ${WPE_MESA_SOURCES})
-target_include_directories(WPE-mesa PRIVATE ${WPE_MESA_INCLUDE_DIRECTORIES})
-target_link_libraries(WPE-mesa ${WPE_MESA_LIBRARIES})
+add_library(WPEBackend-mesa SHARED ${WPE_MESA_SOURCES})
+target_include_directories(WPEBackend-mesa PRIVATE ${WPE_MESA_INCLUDE_DIRECTORIES})
+target_link_libraries(WPEBackend-mesa ${WPE_MESA_LIBRARIES})
 
 set(WPE_MESA_VERSION_MAJOR 0)
 set(WPE_MESA_VERSION_MINOR 1)
 set(WPE_MESA_VERSION ${WPE_MESA_VERSION_MAJOR}.${WPE_MESA_VERSION_MINOR})
 
-set_target_properties(WPE-mesa PROPERTIES VERSION ${WPE_MESA_VERSION} SOVERSION ${WPE_MESA_VERSION_MAJOR})
-install(TARGETS WPE-mesa EXPORT WPE-mesaTargets
+set_target_properties(WPEBackend-mesa PROPERTIES VERSION ${WPE_MESA_VERSION} SOVERSION ${WPE_MESA_VERSION_MAJOR})
+install(TARGETS WPEBackend-mesa
+  EXPORT WPEBackend-mesaTargets
   LIBRARY DESTINATION lib
   INCLUDES DESTINATION include
 )
@@ -141,12 +142,12 @@ if(WPE_MESA_PUBLIC_HEADERS)
   install(FILES ${WPE_MESA_PUBLIC_HEADERS} DESTINATION include/wpe-mesa)
 endif()
 
-# Create a libWPE-backend.so symlink to libWPE-mesa.so and install it.
-add_custom_command(TARGET WPE-mesa
+# Create a libWPEBackend-default.so symlink to libWPEBackend-mesa.so and install it.
+add_custom_command(TARGET WPEBackend-mesa
                    POST_BUILD
-                   COMMAND ${CMAKE_COMMAND} -E create_symlink libWPE-mesa.so ${CMAKE_BINARY_DIR}/libWPE-backend.so
+                   COMMAND ${CMAKE_COMMAND} -E create_symlink libWPEBackend-mesa.so ${CMAKE_BINARY_DIR}/libWPEBackend-default.so
 )
-install(FILES ${CMAKE_BINARY_DIR}/libWPE-backend.so DESTINATION lib)
+install(FILES ${CMAKE_BINARY_DIR}/libWPEBackend-default.so DESTINATION lib)
 
 configure_file(wpe-mesa.pc.cmake wpe-mesa.pc @ONLY)
 install(

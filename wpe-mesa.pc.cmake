@@ -8,4 +8,4 @@ Description: The mesa backend for the wpe library
 Version: @WPE_MESA_VERSION@
 Requires: wpe
 Cflags: -I${includedir}
-Libs: -L${libdir} -lWPE-mesa
+Libs: -L${libdir} -lWPEBackend-mesa
