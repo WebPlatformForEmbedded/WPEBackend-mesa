@@ -12,7 +12,7 @@ option(WPE_MESA_DRM_TEGRA_SUPPORT "Whether to enable support for the Tegra-speci
 
 find_package(GLIB 2.40.0 REQUIRED COMPONENTS gio gio-unix gobject gthread gmodule)
 find_package(LibDRM REQUIRED)
-find_package(Libxkbcommon 0.4.0 REQUIRED)
+find_package(Libxkbcommon 0.5.0 REQUIRED)
 find_package(Wayland 1.6.0 REQUIRED)
 find_package(WaylandCursor REQUIRED)
 add_definitions(-DWPE_BACKEND_DRM=1)
