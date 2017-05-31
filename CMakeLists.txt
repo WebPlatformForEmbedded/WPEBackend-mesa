@@ -12,6 +12,7 @@ option(WPE_MESA_DRM_TEGRA_SUPPORT "Whether to enable support for the Tegra-speci
 
 find_package(GLIB 2.40.0 REQUIRED COMPONENTS gio gio-unix gobject gthread gmodule)
 find_package(LibDRM REQUIRED)
+find_package(LibGBM REQUIRED)
 find_package(Libxkbcommon 0.5.0 REQUIRED)
 find_package(Wayland 1.6.0 REQUIRED)
 find_package(WaylandCursor REQUIRED)
@@ -59,7 +60,6 @@ set(WPE_MESA_SOURCES
 
 if (WPE_MESA_GBM)
     add_definitions(-DWPE_MESA_GBM=1)
-    find_package(LibGBM REQUIRED)
 
     list(APPEND WPE_MESA_INCLUDE_DIRECTORIES
         "src/gbm"
@@ -106,6 +106,7 @@ if (WPE_MESA_EXPERIMENTAL_WAYLAND_EGL)
 
     list(APPEND WPE_MESA_LIBRARIES
         ${LIBDRM_LIBRARIES}
+        ${LIBGBM_LIBRARIES}
         ${WAYLAND_EGL_LIBRARIES}
     )
 
