@@ -117,6 +117,9 @@ const struct wl_registry_listener g_registryListener = {
         if (!std::strcmp(interface, "xdg_shell"))
             interfaces.xdg = static_cast<struct xdg_shell*>(wl_registry_bind(registry, name, &xdg_shell_interface, 1));
 
+        if (!std::strcmp(interface, "wl_shell"))
+            interfaces.shell = static_cast<struct wl_shell*>(wl_registry_bind(registry, name, &wl_shell_interface, 1));
+
         if (!std::strcmp(interface, "ivi_application"))
             interfaces.ivi_application = static_cast<struct ivi_application*>(wl_registry_bind(registry, name, &ivi_application_interface, 1));
 
@@ -561,6 +564,8 @@ Display::~Display()
         wl_seat_destroy(m_interfaces.seat);
     if (m_interfaces.xdg)
         xdg_shell_destroy(m_interfaces.xdg);
+    if (m_interfaces.shell)
+        wl_shell_destroy(m_interfaces.shell);
     if (m_interfaces.ivi_application)
         ivi_application_destroy(m_interfaces.ivi_application);
     if (m_interfaces.shm)

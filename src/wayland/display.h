@@ -46,6 +46,7 @@ struct wl_keyboard;
 struct wl_pointer;
 struct wl_registry;
 struct wl_seat;
+struct wl_shell;
 struct wl_shm;
 struct wl_surface;
 struct wl_touch;
@@ -72,6 +73,7 @@ public:
         uint32_t drm_version;
         struct wl_seat* seat;
         struct xdg_shell* xdg;
+        struct wl_shell* shell;
         struct ivi_application* ivi_application;
         struct wl_shm* shm;
     };

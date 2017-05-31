@@ -77,6 +77,7 @@ private:
 
     struct wl_surface* m_surface;
     struct xdg_surface* m_xdgSurface;
+    struct wl_shell_surface* m_shellSurface;
     struct ivi_surface* m_iviSurface;
     struct wl_cursor_theme* m_cursorTheme {nullptr};
 
@@ -113,6 +114,26 @@ static const struct xdg_surface_listener g_xdgSurfaceListener = {
     },
     // delete
     [](void*, struct xdg_surface*) { },
+};
+
+static const struct wl_shell_surface_listener g_shellSurfaceListener = {
+    // ping
+    [](void* data, struct wl_shell_surface* surface, uint32_t serial)
+    {
+        wl_shell_surface_pong(surface, serial);
+    },
+    // configure
+    [](void* data, struct wl_shell_surface* surface, uint32_t, int32_t width, int32_t height)
+    {
+        if( width != 0 || height != 0 ) {
+            auto* resizeData = static_cast<ViewBackend::ResizingData*>(data);
+            wpe_view_backend_dispatch_set_size(resizeData->backend, std::max(0, width), std::max(0, height));
+            resizeData->width = width;
+            resizeData->height = height;
+        }
+    },
+    // popup_done
+    [](void* data, struct wl_shell_surface* surface) { },
 };
 
 static const struct ivi_surface_listener g_iviSurfaceListener = {
@@ -305,6 +326,11 @@ ViewBackend::ViewBackend(struct wpe_view_backend* backend)
         m_xdgSurface = xdg_shell_get_xdg_surface(m_display.interfaces().xdg, m_surface);
         xdg_surface_add_listener(m_xdgSurface, &g_xdgSurfaceListener, &m_resizingData);
         xdg_surface_set_title(m_xdgSurface, "WPE");
+    } else if (m_display.interfaces().shell) {
+        m_shellSurface = wl_shell_get_shell_surface(m_display.interfaces().shell, m_surface);
+        wl_shell_surface_add_listener(m_shellSurface, &g_shellSurfaceListener, &m_resizingData);
+        wl_shell_surface_set_toplevel(m_shellSurface);
+        wl_shell_surface_set_title(m_shellSurface, "WPE");
     }
 
     if (m_display.interfaces().ivi_application) {
@@ -351,6 +377,9 @@ ViewBackend::~ViewBackend()
     if (m_xdgSurface)
         xdg_surface_destroy(m_xdgSurface);
     m_xdgSurface = nullptr;
+    if (m_shellSurface)
+        wl_shell_surface_destroy(m_shellSurface);
+    m_shellSurface = nullptr;
     if (m_surface)
         wl_surface_destroy(m_surface);
     if (m_cursorTheme)
