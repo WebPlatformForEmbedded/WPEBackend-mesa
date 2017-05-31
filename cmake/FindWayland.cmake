@@ -33,3 +33,9 @@ pkg_check_modules(WAYLAND wayland-client wayland-server)
 
 include(FindPackageHandleStandardArgs)
 FIND_PACKAGE_HANDLE_STANDARD_ARGS(WAYLAND DEFAULT_MSG WAYLAND_LIBRARIES)
+
+find_program(WAYLAND_SCANNER_EXECUTABLE NAMES wayland-scanner)
+
+if(NOT WAYLAND_SCANNER_EXECUTABLE)
+    message(FATAL "The wayland-scanner executable has not been found on your system. You must install it.")
+endif()

@@ -117,6 +117,41 @@ if (WPE_MESA_EXPERIMENTAL_WAYLAND_EGL)
         src/nc/view-backend-wayland.cpp
         src/nc/nc-view-display.cpp
     )
+
+    set(WPE_MESA_PROTOCOL_FILE ${CMAKE_CURRENT_SOURCE_DIR}/src/wayland/protocols/wpe-mesa-protocol.xml)
+    set(WPE_MESA_CLIENT_HEADER_FILE ${CMAKE_CURRENT_BINARY_DIR}/wpe-mesa-client-protocol.h)
+    set(WPE_MESA_SERVER_HEADER_FILE ${CMAKE_CURRENT_BINARY_DIR}/wpe-mesa-server-protocol.h)
+    set(WPE_MESA_CODE_FILE ${CMAKE_CURRENT_BINARY_DIR}/wpe-mesa-code.c)
+
+    add_custom_command(OUTPUT ${WPE_MESA_CLIENT_HEADER_FILE}
+        COMMAND ${WAYLAND_SCANNER_EXECUTABLE} client-header < ${WPE_MESA_PROTOCOL_FILE} > ${WPE_MESA_CLIENT_HEADER_FILE}
+        DEPENDS ${WPE_MESA_PROTOCOL_FILE} VERBATIM
+    )
+
+    add_custom_command(OUTPUT ${WPE_MESA_SERVER_HEADER_FILE}
+        COMMAND ${WAYLAND_SCANNER_EXECUTABLE} server-header < ${WPE_MESA_PROTOCOL_FILE} > ${WPE_MESA_SERVER_HEADER_FILE}
+        DEPENDS ${WPE_MESA_PROTOCOL_FILE} VERBATIM
+    )
+
+    add_custom_command(OUTPUT ${WPE_MESA_CODE_FILE}
+        COMMAND ${WAYLAND_SCANNER_EXECUTABLE} code < ${WPE_MESA_PROTOCOL_FILE} > ${WPE_MESA_CODE_FILE}
+        DEPENDS ${WPE_MESA_PROTOCOL_FILE} VERBATIM
+    )
+
+    set_source_files_properties(
+        ${WPE_MESA_CODE_FILE}
+        ${WPE_MESA_CLIENT_HEADER_FILE}
+        ${WPE_MESA_SERVER_HEADER_FILE}
+        PROPERTIES GENERATED TRUE
+    )
+
+    list(APPEND WPE_MESA_SOURCES
+        ${WPE_MESA_CODE_FILE}
+        ${WPE_MESA_SERVER_HEADER_FILE}
+        ${WPE_MESA_CLIENT_HEADER_FILE}
+    )
+
+    list(APPEND WPE_MESA_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_BINARY_DIR})
 endif ()
 
 if (WPE_MESA_DRM_TEGRA_SUPPORT)

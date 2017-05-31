@@ -53,35 +53,53 @@ namespace Wayland {
 
 class ViewBackend: public NC::ViewDisplay::Client {
 public:
+    class Surface: public NC::ViewDisplay::Surface {
+    public:
+        Surface(struct wpe_view_backend* backend, ::Wayland::Display& display,
+                struct wl_resource* resource, NC::ViewDisplay& view,
+                NC::ViewDisplay::Surface::Type type);
+
+        virtual ~Surface();
+
+        struct ResizingData {
+            struct wpe_view_backend* backend;
+            uint32_t width;
+            uint32_t height;
+        };
+
+    protected:
+        virtual void onSurfaceAttach(NC::ViewDisplay::Buffer* buffer) override;
+        virtual void onSurfaceCommit(const NC::ViewDisplay::Surface::CommitState&) override;
+
+    private:
+        ::Wayland::Display& m_display;
+
+        struct wl_surface* m_surface {nullptr};
+        struct xdg_surface* m_xdgSurface {nullptr};
+        struct wl_shell_surface* m_shellSurface {nullptr};
+        struct ivi_surface* m_iviSurface {nullptr};
+        struct wl_callback* m_callback {nullptr};
+
+        struct wpe_view_backend* m_backend;
+
+        ResizingData m_resizingData { nullptr, 0, 0 };
+    };
+
     ViewBackend(struct wpe_view_backend*);
     virtual ~ViewBackend();
 
-    virtual void OnSurfaceAttach(NC::ViewDisplay::Surface const&, NC::ViewDisplay::Buffer const*) override;
-
-    virtual void OnSurfaceCommit(NC::ViewDisplay::Surface const&, NC::ViewDisplay::Buffer const*,
-            NC::ViewDisplay::FrameCallback const*, NC::ViewDisplay::Damage const*) override;
+    virtual NC::ViewDisplay::Surface* createSurface(struct wl_resource*, NC::ViewDisplay&, NC::ViewDisplay::Surface::Type) override;
 
     void initialize();
 
     struct wpe_view_backend* backend() { return m_backend; }
 
-    struct ResizingData {
-        struct wpe_view_backend* backend;
-        uint32_t width;
-        uint32_t height;
-    };
-
 private:
     ::Wayland::Display& m_display;
     struct wpe_view_backend* m_backend;
 
-    struct wl_surface* m_surface;
-    struct xdg_surface* m_xdgSurface;
-    struct wl_shell_surface* m_shellSurface;
-    struct ivi_surface* m_iviSurface;
     struct wl_cursor_theme* m_cursorTheme {nullptr};
 
-    ResizingData m_resizingData { nullptr, 0, 0 };
 
     struct {
         struct wl_global* drm;
@@ -105,7 +123,7 @@ static const struct xdg_surface_listener g_xdgSurfaceListener = {
     [](void* data, struct xdg_surface* surface, int32_t width, int32_t height, struct wl_array*, uint32_t serial)
     {
         if( width != 0 || height != 0 ) {
-            auto* resizeData = static_cast<ViewBackend::ResizingData*>(data);
+            auto* resizeData = static_cast<ViewBackend::Surface::ResizingData*>(data);
             wpe_view_backend_dispatch_set_size(resizeData->backend, std::max(0, width), std::max(0, height));
             resizeData->width = width;
             resizeData->height = height;
@@ -126,7 +144,7 @@ static const struct wl_shell_surface_listener g_shellSurfaceListener = {
     [](void* data, struct wl_shell_surface* surface, uint32_t, int32_t width, int32_t height)
     {
         if( width != 0 || height != 0 ) {
-            auto* resizeData = static_cast<ViewBackend::ResizingData*>(data);
+            auto* resizeData = static_cast<ViewBackend::Surface::ResizingData*>(data);
             wpe_view_backend_dispatch_set_size(resizeData->backend, std::max(0, width), std::max(0, height));
             resizeData->width = width;
             resizeData->height = height;
@@ -140,7 +158,7 @@ static const struct ivi_surface_listener g_iviSurfaceListener = {
     // configure
     [](void* data, struct ivi_surface*, int32_t width, int32_t height)
     {
-        auto* resizeData = static_cast<ViewBackend::ResizingData*>(data);
+        auto* resizeData = static_cast<ViewBackend::Surface::ResizingData*>(data);
         wpe_view_backend_dispatch_set_size(resizeData->backend, std::max(0, width), std::max(0, height));
         resizeData->width = width;
         resizeData->height = height;
@@ -320,31 +338,9 @@ ViewBackend::ViewBackend(struct wpe_view_backend* backend)
     , m_backend(backend)
     , m_viewDisplay(this)
 {
-    m_surface = wl_compositor_create_surface(m_display.interfaces().compositor);
-
-    if (m_display.interfaces().xdg) {
-        m_xdgSurface = xdg_shell_get_xdg_surface(m_display.interfaces().xdg, m_surface);
-        xdg_surface_add_listener(m_xdgSurface, &g_xdgSurfaceListener, &m_resizingData);
-        xdg_surface_set_title(m_xdgSurface, "WPE");
-    } else if (m_display.interfaces().shell) {
-        m_shellSurface = wl_shell_get_shell_surface(m_display.interfaces().shell, m_surface);
-        wl_shell_surface_add_listener(m_shellSurface, &g_shellSurfaceListener, &m_resizingData);
-        wl_shell_surface_set_toplevel(m_shellSurface);
-        wl_shell_surface_set_title(m_shellSurface, "WPE");
-    }
-
-    if (m_display.interfaces().ivi_application) {
-        m_iviSurface = ivi_application_surface_create(m_display.interfaces().ivi_application,
-            4200 + getpid(), // a unique identifier
-            m_surface);
-        ivi_surface_add_listener(m_iviSurface, &g_iviSurfaceListener, &m_resizingData);
-    }
-
     // Ensure the Pasteboard singleton is constructed early.
     // FIXME:
     // Pasteboard::Pasteboard::singleton();
-
-    m_resizingData.backend = m_backend;
 
     auto& server = NC::RendererHost::singleton();
     server.initialize();
@@ -366,10 +362,59 @@ ViewBackend::~ViewBackend()
 {
     m_backend = nullptr;
 
-    m_display.unregisterInputClient(m_surface);
     m_display.setCursor(nullptr);
 
-    m_resizingData = { nullptr, 0, 0 };
+    if (m_cursorTheme)
+        wl_cursor_theme_destroy(m_cursorTheme);
+}
+
+void ViewBackend::initialize()
+{
+}
+
+NC::ViewDisplay::Surface* ViewBackend::createSurface(struct wl_resource* resource, NC::ViewDisplay& view, NC::ViewDisplay::Surface::Type type)
+{
+    return new Surface(m_backend, m_display, resource, view, type);
+}
+
+ViewBackend::Surface::Surface(struct wpe_view_backend* backend,
+        ::Wayland::Display& display, struct wl_resource* resource,
+        NC::ViewDisplay& view, NC::ViewDisplay::Surface::Type t)
+    : NC::ViewDisplay::Surface(resource, view, t)
+    , m_display(display)
+    , m_backend(backend)
+{
+    m_resizingData.backend = m_backend;
+
+    m_surface = wl_compositor_create_surface(m_display.interfaces().compositor);
+
+    if (type() == NC::ViewDisplay::Surface::OnScreen) {
+        if (m_display.interfaces().xdg) {
+            m_xdgSurface = xdg_shell_get_xdg_surface(m_display.interfaces().xdg, m_surface);
+            xdg_surface_add_listener(m_xdgSurface, &g_xdgSurfaceListener, &m_resizingData);
+            xdg_surface_set_title(m_xdgSurface, "WPE");
+        } else if (m_display.interfaces().shell) {
+            m_shellSurface = wl_shell_get_shell_surface(m_display.interfaces().shell, m_surface);
+            wl_shell_surface_add_listener(m_shellSurface, &g_shellSurfaceListener, &m_resizingData);
+            wl_shell_surface_set_toplevel(m_shellSurface);
+            wl_shell_surface_set_title(m_shellSurface, "WPE");
+        }
+
+        if (m_display.interfaces().ivi_application) {
+            m_iviSurface = ivi_application_surface_create(m_display.interfaces().ivi_application,
+                4200 + getpid(), // a unique identifier
+                m_surface);
+            ivi_surface_add_listener(m_iviSurface, &g_iviSurfaceListener, &m_resizingData);
+        }
+
+        m_display.registerInputClient(m_surface, m_backend);
+    }
+}
+
+ViewBackend::Surface::~Surface()
+{
+    if (type() == NC::ViewDisplay::Surface::OnScreen)
+        m_display.unregisterInputClient(m_surface);
 
     if (m_iviSurface)
         ivi_surface_destroy(m_iviSurface);
@@ -380,15 +425,15 @@ ViewBackend::~ViewBackend()
     if (m_shellSurface)
         wl_shell_surface_destroy(m_shellSurface);
     m_shellSurface = nullptr;
+    if (m_callback)
+        wl_callback_destroy(m_callback);
+    m_callback = nullptr;
     if (m_surface)
         wl_surface_destroy(m_surface);
-    if (m_cursorTheme)
-        wl_cursor_theme_destroy(m_cursorTheme);
-
     m_surface = nullptr;
 }
 
-void ViewBackend::OnSurfaceAttach(NC::ViewDisplay::Surface const&, NC::ViewDisplay::Buffer const* buffer)
+void ViewBackend::Surface::onSurfaceAttach(NC::ViewDisplay::Buffer* buffer)
 {
     struct wl_buffer* b = nullptr;
     int32_t x = 0;
@@ -403,42 +448,33 @@ void ViewBackend::OnSurfaceAttach(NC::ViewDisplay::Surface const&, NC::ViewDispl
     wl_surface_attach(m_surface, b, x, y);
 }
 
-void ViewBackend::OnSurfaceCommit(NC::ViewDisplay::Surface const&, NC::ViewDisplay::Buffer const*,
-        NC::ViewDisplay::FrameCallback const* frameCallback, NC::ViewDisplay::Damage const* damage)
+void ViewBackend::Surface::onSurfaceCommit(const NC::ViewDisplay::Surface::CommitState& state)
 {
-    if (damage)
-        wl_surface_damage(m_surface, damage->X(), damage->Y(), damage->width(),
-                damage->height());
+    static const struct wl_callback_listener frameCallbackListener = {
+        // done
+        [](void* data, struct wl_callback*, uint32_t callback_data)
+        {
+            auto& surface = *static_cast<ViewBackend::Surface*>(data);
+            wl_callback_destroy(surface.m_callback);
+            surface.m_callback = nullptr;
 
-    if (frameCallback) {
-        static const struct wl_callback_listener frameCallbackListener = {
-            // done
-            [](void* data, struct wl_callback*, uint32_t callback_data)
-            {
-                auto* callback_resource = static_cast<struct wl_resource*>(data);
-                wl_callback_send_done(callback_resource, callback_data);
-            },
-        };
+            surface.frameComplete(callback_data);
+        },
+    };
 
-        struct wl_callback* callback = wl_surface_frame(m_surface);
+    if (m_callback)
+        wl_callback_destroy(m_callback);
 
-        wl_resource_set_implementation(frameCallback->resource(), nullptr, callback,
-                [](struct wl_resource* resource)
-                {
-                    auto* callback = static_cast<struct wl_callback*>(wl_resource_get_user_data(resource));
-                    wl_callback_destroy(callback);
-                });
+    m_callback = wl_surface_frame(m_surface);
+    wl_callback_add_listener(m_callback, &frameCallbackListener, this);
 
-        wl_callback_add_listener(callback, &frameCallbackListener, frameCallback->resource());
-    }
+    if (state.damage)
+        wl_surface_damage(m_surface, state.damage->X(), state.damage->Y(), state.damage->width(), state.damage->height());
 
     wl_surface_commit(m_surface);
 }
 
-void ViewBackend::initialize()
-{
-    m_display.registerInputClient(m_surface, m_backend);
-}
+
 } // namespace Wayland
 } // namespace NC
 

@@ -27,8 +27,10 @@
 #ifndef nc_view_display_h
 #define nc_view_display_h
 
+#include <list>
 #include <glib.h>
 #include <wayland-server-core.h>
+#include <wayland-server-protocol.h>
 
 struct wl_display;
 struct wl_global;
@@ -41,15 +43,30 @@ class ViewDisplay {
 public:
     class Resource {
     public:
+        class DestroyListener {
+        public:
+            virtual void onResourceDestroyed(const Resource&) = 0;
+        };
+
         struct wl_resource* resource() const { return m_resource; }
 
+        ViewDisplay& view() const {
+            return m_view;
+        }
+
+        void addDestroyListener(DestroyListener*);
+        void removeDestroyListener(DestroyListener*);
+
     protected:
-        Resource(struct wl_resource* resource);
+        Resource(struct wl_resource* resource, ViewDisplay& view);
         virtual ~Resource();
+
+        ViewDisplay& m_view;
 
     private:
         struct wl_resource* m_resource;
         struct wl_listener m_listener;
+        std::list<DestroyListener*> m_destroyListeners;
 
         static void destroyListener(struct wl_listener*, void*);
     };
@@ -59,8 +76,8 @@ public:
         int32_t X() const { return m_x; }
         int32_t Y() const { return m_y; }
 
-        Buffer(struct wl_resource* resource, int32_t x, int32_t y)
-            : Resource(resource)
+        Buffer(struct wl_resource* resource, ViewDisplay& view, int32_t x, int32_t y)
+            : Resource(resource, view)
             , m_x(x)
             , m_y(y)
             {}
@@ -70,17 +87,64 @@ public:
         int32_t m_y;
     };
 
+    class FrameCallback;
+    class Damage;
+
     class Surface: public Resource {
     public:
-        Surface(struct wl_resource* resource)
-            : Resource(resource)
+        enum Type {
+            OnScreen,
+            OffScreen,
+        };
+
+        Surface(struct wl_resource* resource, ViewDisplay& view, Type type)
+            : Resource(resource, view)
+            , m_type(type)
             {}
+
+        virtual ~Surface();
+
+        void createFrameCallback(struct wl_client* client, uint32_t id, bool render=false);
+        void frameComplete(uint32_t callback_data);
+
+        static const struct wl_surface_interface surfaceInterface;
+
+    protected:
+        struct CommitState {
+            Buffer* buffer;
+            bool bufferAttached;
+            Damage* damage;
+        };
+
+        Type type() const {
+            return m_type;
+        }
+
+        virtual void onSurfaceAttach(Buffer*) { };
+        virtual void onSurfaceCommit(const CommitState&) { };
+
+    private:
+        Type m_type;
+
+        struct {
+            CommitState state { nullptr, false, nullptr };
+            std::list<struct wl_resource*> frameCallbacks;
+            std::list<struct wl_resource*> renderCallbacks;
+        } m_pending;
+
+        struct {
+            std::list<struct wl_resource*> frameCallbacks;
+        } m_current;
+
+        void clearPending();
+
+        static void frameCallbackDestroy(struct wl_resource* resource);
     };
 
     class FrameCallback: public Resource {
     public:
-        FrameCallback(struct wl_resource* resource)
-            : Resource(resource)
+        FrameCallback(struct wl_resource* resource, ViewDisplay& view)
+            : Resource(resource, view)
             {}
     };
 
@@ -109,10 +173,7 @@ public:
 
     class Client {
     public:
-        virtual void OnSurfaceAttach(Surface const&, Buffer const*) {};
-        virtual void OnSurfaceDamage(Surface const&, Damage const*) {};
-        virtual void OnSurfaceFrame(Surface const&, FrameCallback const*) {};
-        virtual void OnSurfaceCommit(Surface const&, Buffer const*, FrameCallback const*, Damage const*) = 0;
+        virtual Surface* createSurface(struct wl_resource*, ViewDisplay&, Surface::Type) = 0;
     };
 
     ViewDisplay(Client*);
@@ -122,24 +183,16 @@ public:
 
     void setClient(Client*);
 
+    Surface* mainSurface() { return m_mainSurface; }
+
 private:
-    struct {
-        Buffer* buffer {nullptr};
-        FrameCallback* frameCallback {nullptr};
-        Damage* damage {nullptr};
-    } m_pending;
-
-    Surface* m_surface {nullptr};
-
     Client* m_client {nullptr};
 
     struct wl_global* m_compositor_global {nullptr};
     struct wl_resource* m_compositor {nullptr};
+    Surface* m_mainSurface {nullptr};
 
-    void clearPending();
-
-    static void unsupportedOperation(struct wl_resource*);
-
+    Surface* createSurface(struct wl_client* client, struct wl_resource* resource, uint32_t id, Surface::Type type);
 };
 
 }; // namespace NC
