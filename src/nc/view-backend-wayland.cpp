@@ -407,7 +407,7 @@ ViewBackend::Surface::Surface(struct wpe_view_backend* backend,
             ivi_surface_add_listener(m_iviSurface, &g_iviSurfaceListener, &m_resizingData);
         }
 
-        m_display.registerInputClient(m_surface, m_backend);
+        m_display.registerInputClient(m_surface, wpe_view_backend_get_input(m_backend));
     }
 }
 

@@ -235,7 +235,7 @@ ViewBackend::~ViewBackend()
 
 void ViewBackend::initialize()
 {
-    m_display.registerInputClient(m_surface, m_backend);
+    m_display.registerInputClient(m_surface, wpe_view_backend_get_input(m_backend));
 }
 
 void ViewBackend::handleFd(int fd)
