@@ -383,6 +383,16 @@ struct wpe_view_backend_interface drm_view_backend_interface = {
         auto* backend = static_cast<DRM::ViewBackend*>(data);
         return backend->m_renderer.ipcHost.releaseClientFD();
     },
+    // create_popup
+    [](void*, struct wpe_popup*, int32_t, int32_t) -> bool
+    {
+        return false;
+    },
+    // alloc_buffer
+    [](void*, struct wpe_buffer*, uint32_t, uint32_t, uint32_t) -> bool
+    {
+        return false;
+    },
 };
 
 }

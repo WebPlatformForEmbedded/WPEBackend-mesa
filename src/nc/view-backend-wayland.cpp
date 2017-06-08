@@ -47,9 +47,15 @@
 #include <wpe/view-backend.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/mman.h>
+#include <cstring>
+#include <fcntl.h>
 
 namespace NC {
 namespace Wayland {
+
+class Popup;
+class Buffer;
 
 class ViewBackend: public NC::ViewDisplay::Client {
 public:
@@ -66,6 +72,8 @@ public:
             uint32_t width;
             uint32_t height;
         };
+
+        struct wl_surface* surface() { return m_surface; }
 
     protected:
         virtual void onSurfaceAttach(NC::ViewDisplay::Buffer* buffer) override;
@@ -93,6 +101,15 @@ public:
     void initialize();
 
     struct wpe_view_backend* backend() { return m_backend; }
+    ::Wayland::Display& display() { return m_display; }
+
+    Buffer* allocBuffer(uint32_t format, uint32_t width, uint32_t height);
+    Popup* allocPopup(struct wpe_popup*, int32_t x, int32_t y);
+
+    Surface* mainSurface()
+    {
+        return dynamic_cast<Surface*>(m_viewDisplay.mainSurface());
+    }
 
 private:
     ::Wayland::Display& m_display;
@@ -116,6 +133,69 @@ private:
 
     static void destroyBuffer(struct wl_resource*);
     static void destroyDrm(struct wl_resource*);
+};
+
+class Popup {
+public:
+    Popup(ViewBackend&, struct wpe_popup*, int32_t x, int32_t y);
+
+    ~Popup();
+
+    static const struct wpe_popup_interface interface;
+
+private:
+    void attachBuffer(Buffer*);
+
+    struct wpe_popup* m_popup;
+    ViewBackend& m_parent;
+
+    struct wl_surface* m_surface {nullptr};
+    struct xdg_popup* m_xdgPopup {nullptr};
+    struct wl_shell_surface* m_shellSurface {nullptr};
+    struct wl_callback* m_frameCallback {nullptr};
+
+    static const struct wl_callback_listener s_frameCallbackListener;
+    static const struct wl_shell_surface_listener s_shellSurfaceListener;
+    static const struct xdg_popup_listener s_xdgPopupListener;
+};
+
+class Buffer {
+public:
+    Buffer(ViewBackend& backend, int fd, void* data, size_t size, uint32_t format, uint32_t width, uint32_t height, uint32_t stride, struct wl_buffer* buffer)
+        : m_backend(backend)
+        , m_buffer(buffer)
+        , m_fd(fd)
+        , m_data(data)
+        , m_size(size)
+        , m_format(format)
+        , m_width(width)
+        , m_height(height)
+        , m_stride(stride)
+    { }
+
+    ~Buffer()
+    {
+        wl_buffer_destroy(m_buffer);
+        munmap(m_data, m_size);
+        close(m_fd);
+    }
+
+    struct wl_buffer* buffer() const { return m_buffer; }
+    uint32_t width() const { return m_width; }
+    uint32_t height() const { return m_height; }
+
+    static const struct wpe_buffer_interface interface;
+
+private:
+    ViewBackend& m_backend;
+    struct wl_buffer* m_buffer;
+    int m_fd;
+    void* m_data;
+    size_t m_size;
+    uint32_t m_format;
+    uint32_t m_width;
+    uint32_t m_height;
+    uint32_t m_stride;
 };
 
 static const struct xdg_surface_listener g_xdgSurfaceListener = {
@@ -474,6 +554,214 @@ void ViewBackend::Surface::onSurfaceCommit(const NC::ViewDisplay::Surface::Commi
     wl_surface_commit(m_surface);
 }
 
+Popup* ViewBackend::allocPopup(struct wpe_popup* popup, int32_t x, int32_t y)
+{
+    return new Popup(*this, popup, x, y);
+}
+
+Buffer* ViewBackend::allocBuffer(uint32_t format, uint32_t width, uint32_t height)
+{
+    static char const temp_file_template[] = "/WPE-shared-XXXXXX";
+    size_t stride = width * 4;
+    size_t size = height * stride;
+
+    if (! m_display.interfaces().shm)
+        return nullptr;
+
+    char const* path = getenv("XDG_RUNTIME_DIR");
+    if (!path)
+        return nullptr;
+
+    char* name = new char[strlen(path) + strlen(temp_file_template) + 1];
+    if (!name)
+        return nullptr;
+
+    strcpy(name, path);
+    strcat(name, temp_file_template);
+
+    int fd = mkostemp(name, O_CLOEXEC);
+
+    if (fd < 0) {
+        delete [] name;
+        return nullptr;
+    }
+    unlink(name);
+    delete [] name;
+
+    ftruncate(fd, size);
+
+    void* data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (data == MAP_FAILED) {
+        close(fd);
+        return nullptr;
+    }
+
+    uint32_t wl_format = format;
+
+    switch (format) {
+    /* These two Wayland format numbers don't match the FourCC numbers, so convert
+     * them specially */
+    case WPE_FOURCC_XRGB8888:
+        wl_format = WL_SHM_FORMAT_XRGB8888;
+        break;
+    case WPE_FOURCC_ARGB8888:
+        wl_format = WL_SHM_FORMAT_ARGB8888;
+        break;
+    default:
+        break;
+    }
+
+    struct wl_shm_pool* pool = wl_shm_create_pool(m_display.interfaces().shm, fd, size);
+    struct wl_buffer* buffer = wl_shm_pool_create_buffer(pool, 0, width, height, stride, wl_format);
+    wl_shm_pool_destroy(pool);
+
+    return new Buffer(*this, fd, data, size, format, width, height, stride, buffer);
+}
+
+const struct wl_callback_listener Popup::s_frameCallbackListener = {
+    // done
+    [](void* data, struct wl_callback* callback, uint32_t callback_data)
+    {
+        auto* popup = static_cast<Popup*>(data);
+        wl_callback_destroy(popup->m_frameCallback);
+        popup->m_frameCallback = nullptr;
+
+        wpe_popup_dispatch_frame_displayed(popup->m_popup);
+    },
+};
+
+const struct wl_shell_surface_listener Popup::s_shellSurfaceListener = {
+    // ping
+    [](void* data, struct wl_shell_surface* surface, uint32_t serial)
+    {
+        wl_shell_surface_pong(surface, serial);
+    },
+    // configure
+    [](void* data, struct wl_shell_surface* surface, uint32_t, int32_t width, int32_t height) { },
+    // popup_done
+    [](void* data, struct wl_shell_surface* surface)
+    {
+        auto* popup = static_cast<Popup*>(data);
+        wl_shell_surface_destroy(popup->m_shellSurface);
+        popup->m_shellSurface = nullptr;
+
+        wpe_popup_dispatch_dismissed(popup->m_popup);
+    },
+};
+
+const struct xdg_popup_listener Popup::s_xdgPopupListener = {
+    // popup_done
+    [](void* data, struct xdg_popup*)
+    {
+        auto* popup = static_cast<Popup*>(data);
+        xdg_popup_destroy(popup->m_xdgPopup);
+        popup->m_xdgPopup = nullptr;
+
+        wpe_popup_dispatch_dismissed(popup->m_popup);
+    },
+};
+
+Popup::Popup(ViewBackend& m_backend, struct wpe_popup* popup, int32_t x, int32_t y)
+    : m_popup(popup)
+    , m_parent(m_backend)
+{
+    auto* parent = m_parent.mainSurface()->surface();
+    auto& display = m_parent.display();
+
+    m_surface = wl_compositor_create_surface(display.interfaces().compositor);
+
+    if (display.interfaces().xdg) {
+        m_xdgPopup = xdg_shell_get_xdg_popup(display.interfaces().xdg, m_surface,
+                parent, display.interfaces().seat, display.serial(), x, y);
+
+        xdg_popup_add_listener(m_xdgPopup, &s_xdgPopupListener, this);
+    } else if (display.interfaces().shell) {
+        m_shellSurface = wl_shell_get_shell_surface(display.interfaces().shell, m_surface);
+
+        wl_shell_surface_set_popup(m_shellSurface, display.interfaces().seat, display.serial(),
+                parent, x, y, 0);
+
+        wl_shell_surface_add_listener(m_shellSurface, &s_shellSurfaceListener, this);
+    }
+
+    display.registerInputClient(m_surface, wpe_popup_get_input(m_popup));
+}
+
+Popup::~Popup()
+{
+    if (m_xdgPopup)
+        xdg_popup_destroy(m_xdgPopup);
+    m_xdgPopup = nullptr;
+    if (m_shellSurface)
+        wl_shell_surface_destroy(m_shellSurface);
+    m_shellSurface = nullptr;
+    if (m_surface) {
+        m_parent.display().unregisterInputClient(m_surface);
+        wl_surface_destroy(m_surface);
+    }
+    m_surface = nullptr;
+    if (m_frameCallback)
+        wl_callback_destroy(m_frameCallback);
+    m_frameCallback = nullptr;
+}
+
+void Popup::attachBuffer(Buffer* buffer)
+{
+    auto& display = m_parent.display();
+
+    if (m_frameCallback)
+        wl_callback_destroy(m_frameCallback);
+
+    if (buffer) {
+        m_frameCallback = wl_surface_frame(m_surface);
+        wl_callback_add_listener(m_frameCallback, &s_frameCallbackListener, this);
+
+        wl_surface_attach(m_surface, buffer->buffer(), 0, 0);
+        wl_surface_damage(m_surface, 0, 0, buffer->width(), buffer->height());
+    } else {
+        wl_surface_attach(m_surface, NULL, 0, 0);
+    }
+
+    wl_surface_commit(m_surface);
+}
+
+const struct wpe_popup_interface Popup::interface = {
+    // destroy
+    [](void* data)
+    {
+        auto* popup = static_cast<Popup*>(data);
+        delete popup;
+    },
+    // attach_buffer
+    [](void* popup_data, void* buffer_data)
+    {
+        auto* popup = static_cast<Popup*>(popup_data);
+        auto* buffer = static_cast<Buffer*>(buffer_data);
+
+        popup->attachBuffer(buffer);
+    },
+};
+
+const struct wpe_buffer_interface Buffer::interface = {
+    // destroy
+    [](void* data)
+    {
+        auto* buffer = static_cast<Buffer*>(data);
+        delete buffer;
+    },
+    // get_info
+    [](void* data, struct wpe_buffer_info* info)
+    {
+        auto* buffer = static_cast<Buffer*>(data);
+
+        info->format = buffer->m_format;
+        info->height = buffer->m_height;
+        info->width = buffer->m_width;
+        info->stride = buffer->m_stride;
+        info->data = buffer->m_data;
+    },
+};
+
 
 } // namespace Wayland
 } // namespace NC
@@ -501,6 +789,32 @@ struct wpe_view_backend_interface nc_view_backend_wayland_interface = {
     [](void* data) -> int
     {
         return -1;
+    },
+    // create_popup
+    [](void* data, struct wpe_popup* popup, int32_t x, int32_t y) -> bool
+    {
+        auto* backend = static_cast<NC::Wayland::ViewBackend*>(data);
+
+        auto* p = backend->allocPopup(popup, x, y);
+
+        if (!p)
+            return false;
+
+        wpe_popup_set_interface(popup, &NC::Wayland::Popup::interface, static_cast<void*>(p));
+        return true;
+    },
+    // alloc_buffer
+    [](void* data, struct wpe_buffer* buffer, uint32_t format, uint32_t width, uint32_t height) -> bool
+    {
+        auto* backend = static_cast<NC::Wayland::ViewBackend*>(data);
+
+        auto* b = backend->allocBuffer(format, width, height);
+
+        if (!b)
+            return false;
+
+        wpe_buffer_set_interface(buffer, &NC::Wayland::Buffer::interface, static_cast<void*>(b));
+        return true;
     },
 };
 

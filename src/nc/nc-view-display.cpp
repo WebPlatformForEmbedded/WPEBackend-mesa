@@ -71,7 +71,7 @@ void ViewDisplay::initialize(struct wl_display* display)
         [](struct wl_client* client, struct wl_resource* resource, uint32_t id)
         {
             auto& view = *static_cast<ViewDisplay*>(wl_resource_get_user_data(resource));
-            view.createSurface(client, resource, id, Surface::OnScreen);
+            view.m_mainSurface = view.createSurface(client, resource, id, Surface::OnScreen);
         },
         // create_offscreen_surface
         [](struct wl_client* client, struct wl_resource* resource, uint32_t id)
