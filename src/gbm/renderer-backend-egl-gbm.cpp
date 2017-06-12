@@ -39,12 +39,18 @@ namespace GBM {
 struct Backend {
     Backend()
     {
-        fd = open("/dev/dri/renderD128", O_RDWR | O_CLOEXEC | O_NOCTTY | O_NONBLOCK);
-        if (fd < 0)
+        const char* renderNode = getenv("WPE_RENDER_NODE");
+        if (!renderNode)
+            renderNode = "/dev/dri/renderD128";
+        fd = open(renderNode, O_RDWR | O_CLOEXEC | O_NOCTTY | O_NONBLOCK);
+        if (fd < 0) {
+            fprintf(stderr, "FATAL: Unable to open the render node device %s\n", renderNode);
             return;
+        }
 
         device = gbm_create_device(fd);
         if (!device) {
+            fprintf(stderr, "FATAL: Unable to create a gbm device on render node %s\n", renderNode);
             close(fd);
             return;
         }

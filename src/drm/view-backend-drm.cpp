@@ -178,9 +178,12 @@ ViewBackend::ViewBackend(struct wpe_view_backend* backend)
         });
 
     // FIXME: This path should be retrieved via udev.
-    drm.fd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
+    const char* renderCard = getenv("WPE_RENDER_CARD");
+    if (!renderCard)
+        renderCard = "/dev/dri/card0";
+    drm.fd = open(renderCard, O_RDWR | O_CLOEXEC);
     if (drm.fd < 0) {
-        fprintf(stderr, "ViewBackend: couldn't connect DRM\n");
+        fprintf(stderr, "ViewBackend: couldn't connect DRM to card %s\n", renderCard);
         return;
     }
 

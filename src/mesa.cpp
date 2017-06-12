@@ -45,10 +45,17 @@
 extern "C" {
 
 static bool under_wayland = !!(std::getenv("WAYLAND_DISPLAY") || std::getenv("WAYLAND_SOCKET"));
+static bool under_x11 = !!(!under_wayland && std::getenv("DISPLAY"));
 
 __attribute__((visibility("default")))
 struct wpe_loader_interface _wpe_loader_interface = {
     [](const char* object_name) -> void* {
+
+        if (under_x11) {
+            fprintf(stderr, "FATAL: WPE Mesa X11 backend not implemented.\n");
+            fprintf(stderr, "Retry from Wayland, from Weston under X11, or from outside X11 (with DRM/KMS)\n");
+            return nullptr;
+        }
 
 #if defined(WPE_MESA_GBM) && WPE_MESA_GBM
         if (!std::strcmp(object_name, "_wpe_view_backend_interface")) {
