@@ -227,9 +227,14 @@ struct wpe_renderer_backend_egl_interface nc_renderer_backend_egl_interface = {
         delete backend;
     },
     // get_native_display
-    [](void* data) -> EGLNativeDisplayType
+    [](void* data, EGLenum* platform) -> EGLNativeDisplayType
     {
         auto& backend = *static_cast<NC::Backend*>(data);
+#ifdef EGL_KHR_platform_wayland
+        char const* extensions = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
+        if (extensions && strstr(extensions, "EGL_EXT_platform_wayland"))
+            *platform = EGL_PLATFORM_WAYLAND_KHR;
+#endif
         return (EGLNativeDisplayType)backend.display();
     },
 };
