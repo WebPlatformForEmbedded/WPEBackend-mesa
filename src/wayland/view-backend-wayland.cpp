@@ -53,6 +53,7 @@ public:
 
     struct wpe_view_backend* backend() { return m_backend; }
     IPC::Host& ipcHost() { return m_renderer.ipcHost; }
+    const Display& display() const { return m_display; }
 
     struct BufferListenerData {
         IPC::Host* ipcHost;
@@ -69,6 +70,8 @@ public:
         uint32_t width;
         uint32_t height;
     };
+
+    struct wl_surface* surface() const { return m_surface; }
 
 private:
     Display& m_display;
@@ -327,6 +330,18 @@ struct wpe_view_backend_interface wayland_view_backend_interface = {
     [](void*, struct wpe_buffer*, uint32_t, uint32_t, uint32_t) -> bool
     {
         return false;
+    },
+    // get_display
+    [](void* data) -> struct wl_display*
+    {
+        auto* backend = static_cast<Wayland::ViewBackend*>(data);
+        return backend->display().display();
+    },
+    // get_surface
+    [](void* data) -> struct wl_surface*
+    {
+        auto* backend = static_cast<Wayland::ViewBackend*>(data);
+        return backend->surface();
     },
 };
 

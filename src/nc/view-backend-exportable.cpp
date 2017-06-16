@@ -307,6 +307,8 @@ static struct wpe_view_backend_interface exportable_view_backend_interface = {
     {
         return false;
     },
+    nullptr, // get_display
+    nullptr, // get_surface
 };
 
 __attribute__((visibility("default")))

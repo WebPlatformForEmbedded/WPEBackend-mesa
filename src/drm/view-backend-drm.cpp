@@ -393,6 +393,8 @@ struct wpe_view_backend_interface drm_view_backend_interface = {
     {
         return false;
     },
+    nullptr, // get_display
+    nullptr, // get_surface
 };
 
 }

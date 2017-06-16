@@ -816,6 +816,21 @@ struct wpe_view_backend_interface nc_view_backend_wayland_interface = {
         wpe_buffer_set_interface(buffer, &NC::Wayland::Buffer::interface, static_cast<void*>(b));
         return true;
     },
+    // get_display
+    [](void* data) -> struct wl_display*
+    {
+        auto* backend = static_cast<NC::Wayland::ViewBackend*>(data);
+        return backend->display().display();
+    },
+    // get_surface
+    [](void* data) -> struct wl_surface*
+    {
+        auto* backend = static_cast<NC::Wayland::ViewBackend*>(data);
+        auto* surface = backend->mainSurface();
+        if (surface)
+            return surface->surface();
+        return nullptr;
+    },
 };
 
 }
