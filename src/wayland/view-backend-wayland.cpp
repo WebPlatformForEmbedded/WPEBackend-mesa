@@ -75,8 +75,8 @@ private:
     struct wpe_view_backend* m_backend;
 
     struct wl_surface* m_surface;
-    struct xdg_surface* m_xdgSurface;
-    struct ivi_surface* m_iviSurface;
+    struct xdg_surface* m_xdgSurface { nullptr };
+    struct ivi_surface* m_iviSurface { nullptr };
 
     BufferListenerData m_bufferData { nullptr, decltype(m_bufferData.map){ } };
     CallbackListenerData m_callbackData { nullptr, nullptr };
