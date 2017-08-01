@@ -34,6 +34,7 @@
 #include <glib.h>
 #include <wayland-client.h>
 #include <wayland-egl.h>
+#include "wpe-mesa-client-protocol.h"
 
 namespace NC {
 
@@ -88,6 +89,9 @@ public:
     struct wl_display* display() const { return m_display; }
 
     struct wl_surface* createSurface() const;
+    struct wl_surface* createOffscreenSurface() const;
+
+    struct wl_callback* surfaceRendered(struct wl_surface* surface) const;
 
     void initialize();
 
@@ -96,7 +100,7 @@ private:
 
     struct wl_display* m_display;
     struct wl_registry* m_registry;
-    struct wl_compositor* m_compositor;
+    struct wpe_mesa_compositor* m_compositor;
 
     GSource* m_source {nullptr};
 };
@@ -116,10 +120,13 @@ struct EGLTarget {
             wl_egl_window_destroy(egl_window);
     }
 
+    Backend* backend = {nullptr};
+
     struct wpe_renderer_backend_egl_target* target;
 
-    struct wl_surface* surface {NULL};
-    struct wl_egl_window* egl_window {NULL};
+    struct wl_surface* surface {nullptr};
+    struct wl_egl_window* egl_window {nullptr};
+    struct wl_callback* rendered {nullptr};
 };
 
 struct EGLOffscreenTarget {
@@ -157,7 +164,17 @@ Backend::~Backend()
 
 struct wl_surface* Backend::createSurface() const
 {
-    return wl_compositor_create_surface(m_compositor);
+    return wpe_mesa_compositor_create_surface(m_compositor);
+}
+
+struct wl_surface* Backend::createOffscreenSurface() const
+{
+    return wpe_mesa_compositor_create_offscreen_surface(m_compositor);
+}
+
+struct wl_callback* Backend::surfaceRendered(struct wl_surface* surface) const
+{
+    return wpe_mesa_compositor_surface_rendered(m_compositor, surface);
 }
 
 void Backend::initialize()
@@ -184,8 +201,8 @@ const struct wl_registry_listener Backend::s_registryListener = {
     {
         auto& backend = *reinterpret_cast<Backend*>(data);
 
-        if (!std::strcmp(interface, "wl_compositor"))
-            backend.m_compositor = static_cast<struct wl_compositor*>(wl_registry_bind(registry, name, &wl_compositor_interface, 1));
+        if (!std::strcmp(interface, "wpe_mesa_compositor"))
+            backend.m_compositor = static_cast<struct wpe_mesa_compositor*>(wl_registry_bind(registry, name, &wpe_mesa_compositor_interface, 1));
     },
     // global_remove
     [](void*, struct wl_registry*, uint32_t)
@@ -210,11 +227,28 @@ struct wpe_renderer_backend_egl_interface nc_renderer_backend_egl_interface = {
         delete backend;
     },
     // get_native_display
-    [](void* data) -> EGLNativeDisplayType
+    [](void* data, EGLenum* platform) -> EGLNativeDisplayType
     {
         auto& backend = *static_cast<NC::Backend*>(data);
+#ifdef EGL_KHR_platform_wayland
+        char const* extensions = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
+        if (extensions && strstr(extensions, "EGL_EXT_platform_wayland"))
+            *platform = EGL_PLATFORM_WAYLAND_KHR;
+#endif
         return (EGLNativeDisplayType)backend.display();
     },
+};
+
+static void frame_callback(void *data, struct wl_callback* callback, uint32_t time)
+{
+    auto& target = *static_cast<NC::EGLTarget*>(data);
+    //wl_callback_destroy(target.rendered);
+
+    wpe_renderer_backend_egl_target_dispatch_frame_complete(target.target);
+}
+
+static const struct wl_callback_listener frame_listener = {
+    frame_callback
 };
 
 struct wpe_renderer_backend_egl_target_interface nc_renderer_backend_egl_target_interface = {
@@ -237,6 +271,7 @@ struct wpe_renderer_backend_egl_target_interface nc_renderer_backend_egl_target_
 
         backend.initialize();
 
+        target.backend = &backend;
         target.surface = backend.createSurface();
         target.egl_window = wl_egl_window_create(target.surface,
                 width, height);
@@ -257,12 +292,17 @@ struct wpe_renderer_backend_egl_target_interface nc_renderer_backend_egl_target_
     // frame_will_render
     [](void* data)
     {
+        auto& target = *static_cast<NC::EGLTarget*>(data);
+
+        if (target.rendered)
+            wl_callback_destroy(target.rendered);
+
+        target.rendered = target.backend->surfaceRendered(target.surface);
+        wl_callback_add_listener(target.rendered, &frame_listener, data);
     },
     // frame_rendered
     [](void* data)
     {
-        auto& target = *static_cast<NC::EGLTarget*>(data);
-        wpe_renderer_backend_egl_target_dispatch_frame_complete(target.target);
     },
 };
 
@@ -284,7 +324,7 @@ struct wpe_renderer_backend_egl_offscreen_target_interface nc_renderer_backend_e
         auto& target = *static_cast<NC::EGLOffscreenTarget*>(data);
         auto& backend = *static_cast<NC::Backend*>(backend_data);
 
-        target.surface = backend.createSurface();
+        target.surface = backend.createOffscreenSurface();
         target.egl_window = wl_egl_window_create(target.surface, 1, 1);
     },
     // get_native_window

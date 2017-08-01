@@ -30,8 +30,11 @@
 #include "ipc-gbm.h"
 #include <cassert>
 #include <cstdio>
+#include <cstring>
 #include <fcntl.h>
 #include <gbm.h>
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
 #include <unordered_map>
 
 namespace GBM {
@@ -161,9 +164,14 @@ struct wpe_renderer_backend_egl_interface gbm_renderer_backend_egl_interface = {
         delete backend;
     },
     // get_native_display
-    [](void* data) -> EGLNativeDisplayType
+    [](void* data, EGLenum* platform) -> EGLNativeDisplayType
     {
         auto* backend = static_cast<GBM::Backend*>(data);
+#ifdef EGL_MESA_platform_gbm
+        char const* extensions = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
+        if (extensions && strstr(extensions, "EGL_MESA_platform_gbm"))
+            *platform = EGL_PLATFORM_GBM_MESA;
+#endif
         return (EGLNativeDisplayType)backend->device;
     },
 };

@@ -57,37 +57,50 @@ struct wpe_loader_interface _wpe_loader_interface = {
             return nullptr;
         }
 
+        char const* backend = std::getenv("WPE_BACKEND");
+        if (!backend) {
 #if defined(WPE_MESA_GBM) && WPE_MESA_GBM
-        if (!std::strcmp(object_name, "_wpe_view_backend_interface")) {
-            if (under_wayland)
-                return reinterpret_cast<void*>(&wayland_view_backend_interface);
-            return reinterpret_cast<void*>(&drm_view_backend_interface);
+            backend = "gbm";
+#elif defined(WPE_MESA_EXPERIMENTAL_WAYLAND_EGL) && WPE_MESA_EXPERIMENTAL_WAYLAND_EGL
+            backend = "nc";
+#endif
         }
 
-        if (!std::strcmp(object_name, "_wpe_renderer_host_interface"))
-            return &gbm_renderer_host_interface;
+#if defined(WPE_MESA_GBM) && WPE_MESA_GBM
+        if (!std::strcmp(backend, "gbm")) {
+            if (!std::strcmp(object_name, "_wpe_view_backend_interface")) {
+                if (under_wayland)
+                    return reinterpret_cast<void*>(&wayland_view_backend_interface);
+                return reinterpret_cast<void*>(&drm_view_backend_interface);
+            }
 
-        if (!std::strcmp(object_name, "_wpe_renderer_backend_egl_interface"))
-            return &gbm_renderer_backend_egl_interface;
-        if (!std::strcmp(object_name, "_wpe_renderer_backend_egl_target_interface"))
-            return &gbm_renderer_backend_egl_target_interface;
-        if (!std::strcmp(object_name, "_wpe_renderer_backend_egl_offscreen_target_interface"))
-            return &gbm_renderer_backend_egl_offscreen_target_interface;
+            if (!std::strcmp(object_name, "_wpe_renderer_host_interface"))
+                return &gbm_renderer_host_interface;
+
+            if (!std::strcmp(object_name, "_wpe_renderer_backend_egl_interface"))
+                return &gbm_renderer_backend_egl_interface;
+            if (!std::strcmp(object_name, "_wpe_renderer_backend_egl_target_interface"))
+                return &gbm_renderer_backend_egl_target_interface;
+            if (!std::strcmp(object_name, "_wpe_renderer_backend_egl_offscreen_target_interface"))
+                return &gbm_renderer_backend_egl_offscreen_target_interface;
+        }
 #endif
 
 #if defined(WPE_MESA_EXPERIMENTAL_WAYLAND_EGL) && WPE_MESA_EXPERIMENTAL_WAYLAND_EGL
-        if (!std::strcmp(object_name, "_wpe_renderer_backend_egl_interface"))
-            return &nc_renderer_backend_egl_interface;
-        if (!std::strcmp(object_name, "_wpe_renderer_backend_egl_target_interface"))
-            return &nc_renderer_backend_egl_target_interface;
-        if (!std::strcmp(object_name, "_wpe_renderer_backend_egl_offscreen_target_interface"))
-            return &nc_renderer_backend_egl_offscreen_target_interface;
-        if (!std::strcmp(object_name, "_wpe_renderer_host_interface"))
-            return &nc_renderer_host_interface;
-        if (!std::strcmp(object_name, "_wpe_view_backend_interface")) {
-            if (under_wayland)
-                return &nc_view_backend_wayland_interface;
-            return &nc_view_backend_drm_interface;
+        if (!std::strcmp(backend, "nc") || !std::strcmp(backend, "drm")) {
+            if (!std::strcmp(object_name, "_wpe_renderer_backend_egl_interface"))
+                return &nc_renderer_backend_egl_interface;
+            if (!std::strcmp(object_name, "_wpe_renderer_backend_egl_target_interface"))
+                return &nc_renderer_backend_egl_target_interface;
+            if (!std::strcmp(object_name, "_wpe_renderer_backend_egl_offscreen_target_interface"))
+                return &nc_renderer_backend_egl_offscreen_target_interface;
+            if (!std::strcmp(object_name, "_wpe_renderer_host_interface"))
+                return &nc_renderer_host_interface;
+            if (!std::strcmp(object_name, "_wpe_view_backend_interface")) {
+                if (under_wayland)
+                    return &nc_view_backend_wayland_interface;
+                return &nc_view_backend_drm_interface;
+            }
         }
 #endif
 

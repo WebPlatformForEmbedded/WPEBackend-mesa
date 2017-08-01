@@ -150,6 +150,18 @@ struct wpe_view_backend_interface exportable_dma_buf_view_backend_interface = {
         auto& backend = *static_cast<ExportableDmaBuf::ViewBackend*>(data);
         return backend.ipcHost().releaseClientFD();
     },
+    // create_popup
+    [](void*, struct wpe_popup*, int32_t, int32_t) -> bool
+    {
+        return false;
+    },
+    // alloc_buffer
+    [](void*, struct wpe_buffer*, uint32_t, uint32_t, uint32_t) -> bool
+    {
+        return false;
+    },
+    nullptr, // get_display
+    nullptr, // get_surface
 };
 
 __attribute__((visibility("default")))

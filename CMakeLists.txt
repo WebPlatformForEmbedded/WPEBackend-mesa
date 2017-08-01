@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 2.8)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
@@ -12,7 +12,8 @@ option(WPE_MESA_DRM_TEGRA_SUPPORT "Whether to enable support for the Tegra-speci
 
 find_package(GLIB 2.40.0 REQUIRED COMPONENTS gio gio-unix gobject gthread gmodule)
 find_package(LibDRM REQUIRED)
-find_package(Libxkbcommon 0.4.0 REQUIRED)
+find_package(LibGBM REQUIRED)
+find_package(Libxkbcommon 0.5.0 REQUIRED)
 find_package(Wayland 1.6.0 REQUIRED)
 find_package(WaylandCursor REQUIRED)
 add_definitions(-DWPE_BACKEND_DRM=1)
@@ -59,7 +60,6 @@ set(WPE_MESA_SOURCES
 
 if (WPE_MESA_GBM)
     add_definitions(-DWPE_MESA_GBM=1)
-    find_package(LibGBM REQUIRED)
 
     list(APPEND WPE_MESA_INCLUDE_DIRECTORIES
         "src/gbm"
@@ -106,6 +106,7 @@ if (WPE_MESA_EXPERIMENTAL_WAYLAND_EGL)
 
     list(APPEND WPE_MESA_LIBRARIES
         ${LIBDRM_LIBRARIES}
+        ${LIBGBM_LIBRARIES}
         ${WAYLAND_EGL_LIBRARIES}
     )
 
@@ -116,6 +117,41 @@ if (WPE_MESA_EXPERIMENTAL_WAYLAND_EGL)
         src/nc/view-backend-wayland.cpp
         src/nc/nc-view-display.cpp
     )
+
+    set(WPE_MESA_PROTOCOL_FILE ${CMAKE_CURRENT_SOURCE_DIR}/src/wayland/protocols/wpe-mesa-protocol.xml)
+    set(WPE_MESA_CLIENT_HEADER_FILE ${CMAKE_CURRENT_BINARY_DIR}/wpe-mesa-client-protocol.h)
+    set(WPE_MESA_SERVER_HEADER_FILE ${CMAKE_CURRENT_BINARY_DIR}/wpe-mesa-server-protocol.h)
+    set(WPE_MESA_CODE_FILE ${CMAKE_CURRENT_BINARY_DIR}/wpe-mesa-code.c)
+
+    add_custom_command(OUTPUT ${WPE_MESA_CLIENT_HEADER_FILE}
+        COMMAND ${WAYLAND_SCANNER_EXECUTABLE} client-header < ${WPE_MESA_PROTOCOL_FILE} > ${WPE_MESA_CLIENT_HEADER_FILE}
+        DEPENDS ${WPE_MESA_PROTOCOL_FILE} VERBATIM
+    )
+
+    add_custom_command(OUTPUT ${WPE_MESA_SERVER_HEADER_FILE}
+        COMMAND ${WAYLAND_SCANNER_EXECUTABLE} server-header < ${WPE_MESA_PROTOCOL_FILE} > ${WPE_MESA_SERVER_HEADER_FILE}
+        DEPENDS ${WPE_MESA_PROTOCOL_FILE} VERBATIM
+    )
+
+    add_custom_command(OUTPUT ${WPE_MESA_CODE_FILE}
+        COMMAND ${WAYLAND_SCANNER_EXECUTABLE} code < ${WPE_MESA_PROTOCOL_FILE} > ${WPE_MESA_CODE_FILE}
+        DEPENDS ${WPE_MESA_PROTOCOL_FILE} VERBATIM
+    )
+
+    set_source_files_properties(
+        ${WPE_MESA_CODE_FILE}
+        ${WPE_MESA_CLIENT_HEADER_FILE}
+        ${WPE_MESA_SERVER_HEADER_FILE}
+        PROPERTIES GENERATED TRUE
+    )
+
+    list(APPEND WPE_MESA_SOURCES
+        ${WPE_MESA_CODE_FILE}
+        ${WPE_MESA_SERVER_HEADER_FILE}
+        ${WPE_MESA_CLIENT_HEADER_FILE}
+    )
+
+    list(APPEND WPE_MESA_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_BINARY_DIR})
 endif ()
 
 if (WPE_MESA_DRM_TEGRA_SUPPORT)

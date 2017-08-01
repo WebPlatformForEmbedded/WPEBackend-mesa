@@ -117,7 +117,7 @@ struct PageFlipHandlerData {
     ViewBackend* backend;
 };
 
-class FBInfo {
+class FBInfo: public NC::ViewDisplay::Resource::DestroyListener {
 public:
     FBInfo(struct gbm_bo*);
     ~FBInfo();
@@ -126,32 +126,47 @@ public:
 
     uint32_t getFBID() const {return m_fb_id;}
 
-    void setBuffer(struct wl_resource* resource);
-    void setFrameCallback(struct wl_resource* resource);
+    void setSurface(NC::ViewDisplay::Surface*);
+    void setBuffer(NC::ViewDisplay::Buffer*);
 
     void releaseBuffer();
     void sendFrameCallback(uint32_t);
 
+    virtual void onResourceDestroyed(const NC::ViewDisplay::Resource&);
+
 private:
     struct gbm_bo* m_bo {nullptr};
     uint32_t m_fb_id {0};
-    struct wl_resource* m_buffer {nullptr};
-    struct wl_resource* m_frame_callback {nullptr};
-
-    struct wl_listener m_buffer_destroy_listener;
-    struct wl_listener m_frame_callback_destroy_listener;
-
-    static void bufferDestroyed(struct wl_listener* listener, void*);
-    static void frameCallbackDestroyed(struct wl_listener* listener, void*);
+    NC::ViewDisplay::Buffer* m_buffer { nullptr };
+    NC::ViewDisplay::Surface* m_surface { nullptr };
 };
 
 class ViewBackend: public NC::ViewDisplay::Client {
 public:
+    class Surface: public NC::ViewDisplay::Surface {
+    public:
+        Surface(ViewBackend& backend, struct wl_resource* resource,
+                NC::ViewDisplay& view, NC::ViewDisplay::Surface::Type type)
+            : NC::ViewDisplay::Surface(resource, view, type)
+            , m_backend(backend)
+            { }
+
+        virtual ~Surface()
+        { }
+
+    protected:
+        virtual void onSurfaceCommit(const NC::ViewDisplay::Surface::CommitState&) override;
+
+    private:
+        ViewBackend& m_backend;
+    };
+
     ViewBackend(struct wpe_view_backend*);
     virtual ~ViewBackend();
 
-    virtual void OnSurfaceCommit(NC::ViewDisplay::Surface const&, NC::ViewDisplay::Buffer const*,
-            NC::ViewDisplay::FrameCallback const*, NC::ViewDisplay::Damage const*) override;
+    virtual NC::ViewDisplay::Surface* createSurface(struct wl_resource*, NC::ViewDisplay&, NC::ViewDisplay::Surface::Type) override;
+
+    void flipBuffer(NC::ViewDisplay::Buffer*, Surface*);
 
     struct wpe_view_backend* backend;
 
@@ -553,63 +568,69 @@ ViewBackend::~ViewBackend()
     eglDestroyContext(m_egl.display, m_egl.context);
 }
 
-void ViewBackend::OnSurfaceCommit(NC::ViewDisplay::Surface const& surface,
-        NC::ViewDisplay::Buffer const* buffer, NC::ViewDisplay::FrameCallback const* frameCallback,
-        NC::ViewDisplay::Damage const* damage)
+NC::ViewDisplay::Surface* ViewBackend::createSurface(struct wl_resource* resource, NC::ViewDisplay& view, NC::ViewDisplay::Surface::Type type)
 {
-    if (buffer) {
-        if (m_display.next_bo) {
-            fprintf(stderr, "Page flip already pending\n");
-            abort();
-        }
+    return new Surface(*this, resource, view, type);
+}
 
-        if (m_egl.egl_image != EGL_NO_IMAGE_KHR) {
-            m_egl.eglDestroyImageKHR(m_egl.display, m_egl.egl_image);
-        }
-
-        m_egl.egl_image = m_egl.eglCreateImageKHR(m_egl.display,
-                nullptr, EGL_WAYLAND_BUFFER_WL, buffer->resource(), nullptr);
-
-        if (m_egl.egl_image == EGL_NO_IMAGE_KHR) {
-            fprintf(stderr, "Cannot create EGL image: %i\n", eglGetError());
-            return;
-        }
-
-        m_egl.glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, m_egl.egl_image);
-
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        static const GLfloat vertices[] = {
-            -1.0f, 1.0f, 0.0f,
-            1.0f, 1.0f, 0.0f,
-            -1.0f, -1.0f, 0.0f,
-            1.0f, -1.0f, 0.0f,
-        };
-
-        static const GLfloat texCoord[] = {
-            0.0f, 0.0f,
-            1.0f, 0.0f,
-            0.0f, 1.0f,
-            1.0f, 1.0f
-        };
-
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, vertices);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, texCoord);
-
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-        eglSwapBuffers(m_egl.display, m_egl.surface);
-
-        m_display.next_bo = gbm_surface_lock_front_buffer(m_gbm.surface);
-
-        auto* fb = getFBInfo(m_display.next_bo);
-        fb->setBuffer(buffer->resource());
-        if (frameCallback)
-            fb->setFrameCallback(frameCallback->resource());
-
-        drmModePageFlip(m_drm.fd, m_drm.crtcId, fb->getFBID(),
-                DRM_MODE_PAGE_FLIP_EVENT, this);
+void ViewBackend::flipBuffer(NC::ViewDisplay::Buffer* buffer, ViewBackend::Surface* surface)
+{
+    if (m_display.next_bo) {
+        fprintf(stderr, "Page flip already pending\n");
+        abort();
     }
+
+    if (m_egl.egl_image != EGL_NO_IMAGE_KHR) {
+        m_egl.eglDestroyImageKHR(m_egl.display, m_egl.egl_image);
+    }
+
+    m_egl.egl_image = m_egl.eglCreateImageKHR(m_egl.display,
+            nullptr, EGL_WAYLAND_BUFFER_WL, buffer->resource(), nullptr);
+
+    if (m_egl.egl_image == EGL_NO_IMAGE_KHR) {
+        fprintf(stderr, "Cannot create EGL image: %i\n", eglGetError());
+        return;
+    }
+
+    m_egl.glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, m_egl.egl_image);
+
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    static const GLfloat vertices[] = {
+        -1.0f, 1.0f, 0.0f,
+        1.0f, 1.0f, 0.0f,
+        -1.0f, -1.0f, 0.0f,
+        1.0f, -1.0f, 0.0f,
+    };
+
+    static const GLfloat texCoord[] = {
+        0.0f, 0.0f,
+        1.0f, 0.0f,
+        0.0f, 1.0f,
+        1.0f, 1.0f
+    };
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, vertices);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, texCoord);
+
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+    eglSwapBuffers(m_egl.display, m_egl.surface);
+
+    m_display.next_bo = gbm_surface_lock_front_buffer(m_gbm.surface);
+
+    auto* fb = getFBInfo(m_display.next_bo);
+    fb->setBuffer(buffer);
+    fb->setSurface(surface);
+
+    drmModePageFlip(m_drm.fd, m_drm.crtcId, fb->getFBID(),
+            DRM_MODE_PAGE_FLIP_EVENT, this);
+}
+
+void ViewBackend::Surface::onSurfaceCommit(const NC::ViewDisplay::Surface::CommitState& state)
+{
+    if (state.bufferAttached && state.buffer && type() == NC::ViewDisplay::Surface::OnScreen)
+        m_backend.flipBuffer(state.buffer, this);
 }
 
 void ViewBackend::boDestroyed(struct gbm_bo* bo, void* data)
@@ -637,12 +658,6 @@ FBInfo::FBInfo(struct gbm_bo* bo)
 {
     struct gbm_device* device = gbm_bo_get_device(bo);
 
-    memset(&m_buffer_destroy_listener, 0, sizeof(m_buffer_destroy_listener));
-    memset(&m_frame_callback_destroy_listener, 0, sizeof(m_frame_callback_destroy_listener));
-
-    m_buffer_destroy_listener.notify = bufferDestroyed;
-    m_frame_callback_destroy_listener.notify = frameCallbackDestroyed;
-
     uint32_t width = gbm_bo_get_width(bo);
     uint32_t height = gbm_bo_get_height(bo);
     uint32_t stride = gbm_bo_get_stride(bo);
@@ -661,64 +676,61 @@ FBInfo::~FBInfo()
     struct gbm_device* device = gbm_bo_get_device(m_bo);
 
     setBuffer(nullptr);
-    setFrameCallback(nullptr);
+    setSurface(nullptr);
 
     if (m_fb_id)
         drmModeRmFB(gbm_device_get_fd(device), m_fb_id);
 }
 
-void FBInfo::setBuffer(struct wl_resource* resource)
+void FBInfo::setSurface(NC::ViewDisplay::Surface* surface)
 {
-    if (m_buffer) {
-        wl_list_remove(&m_buffer_destroy_listener.link);
-        m_buffer = nullptr;
+    if (m_surface) {
+        m_surface->removeDestroyListener(this);
+        m_surface = nullptr;
     }
 
-    if (resource) {
-        m_buffer = resource;
-        wl_resource_add_destroy_listener(resource, &m_buffer_destroy_listener);
+    if (surface) {
+        m_surface = surface;
+        m_surface->addDestroyListener(this);
     }
 }
 
-void FBInfo::setFrameCallback(struct wl_resource* resource)
+void FBInfo::setBuffer(NC::ViewDisplay::Buffer* buffer)
 {
-    if (m_frame_callback) {
-        wl_list_remove(&m_frame_callback_destroy_listener.link);
-        m_frame_callback = nullptr;
+    if (m_buffer) {
+        m_buffer->removeDestroyListener(this);
+        m_buffer = nullptr;
     }
 
-    if (resource) {
-        m_frame_callback = resource;
-        wl_resource_add_destroy_listener(resource, &m_frame_callback_destroy_listener);
+    if (buffer) {
+        m_buffer = buffer;
+        m_buffer->addDestroyListener(this);
     }
 }
 
 void FBInfo::releaseBuffer()
 {
     if (m_buffer) {
-        wl_buffer_send_release(m_buffer);
+        wl_buffer_send_release(m_buffer->resource());
         setBuffer(nullptr);
     }
 }
 
 void FBInfo::sendFrameCallback(uint32_t t)
 {
-    if (m_frame_callback) {
-        wl_callback_send_done(m_frame_callback, t);
-        setFrameCallback(nullptr);
+    if (m_surface) {
+        m_surface->frameComplete(t);
+        setSurface(nullptr);
     }
 }
 
-void FBInfo::bufferDestroyed(struct wl_listener* listener, void* data)
+void FBInfo::onResourceDestroyed(const NC::ViewDisplay::Resource& resource)
 {
-    FBInfo* fb = container_of(listener, &FBInfo::m_buffer_destroy_listener);
-    fb->setBuffer(nullptr);
-}
+    if (&resource == static_cast<NC::ViewDisplay::Resource*>(m_surface))
+        setSurface(nullptr);
 
-void FBInfo::frameCallbackDestroyed(struct wl_listener* listener, void* data)
-{
-    FBInfo* fb = container_of(listener, &FBInfo::m_frame_callback_destroy_listener);
-    fb->setFrameCallback(nullptr);
+    if (&resource == static_cast<NC::ViewDisplay::Resource*>(m_buffer))
+        setBuffer(nullptr);
 }
 
 } // namespace DRM
@@ -749,6 +761,16 @@ struct wpe_view_backend_interface nc_view_backend_drm_interface = {
     [](void* data) -> int
     {
         return -1;
+    },
+    // create_popup
+    [](void*, struct wpe_popup*, int32_t, int32_t) -> bool
+    {
+        return false;
+    },
+    // alloc_buffer
+    [](void*, struct wpe_buffer*, uint32_t, uint32_t, uint32_t) -> bool
+    {
+        return false;
     },
 };
 

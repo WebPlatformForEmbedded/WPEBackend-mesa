@@ -117,6 +117,9 @@ const struct wl_registry_listener g_registryListener = {
         if (!std::strcmp(interface, "xdg_shell"))
             interfaces.xdg = static_cast<struct xdg_shell*>(wl_registry_bind(registry, name, &xdg_shell_interface, 1));
 
+        if (!std::strcmp(interface, "wl_shell"))
+            interfaces.shell = static_cast<struct wl_shell*>(wl_registry_bind(registry, name, &wl_shell_interface, 1));
+
         if (!std::strcmp(interface, "ivi_application"))
             interfaces.ivi_application = static_cast<struct ivi_application*>(wl_registry_bind(registry, name, &ivi_application_interface, 1));
 
@@ -180,8 +183,8 @@ static const struct wl_pointer_listener g_pointerListener = {
         if (pointer.target.first) {
             struct wpe_input_pointer_event event = { wpe_input_pointer_event_type_motion, time, x, y, pointer.button, pointer.state };
 
-            struct wpe_view_backend* backend = pointer.target.second;
-            wpe_view_backend_dispatch_pointer_event(backend, &event);
+            struct wpe_input* backend = pointer.target.second;
+            wpe_input_dispatch_pointer_event(backend, &event);
         }
     },
     // button
@@ -203,8 +206,8 @@ static const struct wl_pointer_listener g_pointerListener = {
         if (pointer.target.first) {
             struct wpe_input_pointer_event event = { wpe_input_pointer_event_type_button, time, coords.first, coords.second, button, state };
 
-            struct wpe_view_backend* backend = pointer.target.second;
-            wpe_view_backend_dispatch_pointer_event(backend, &event);
+            struct wpe_input* backend = pointer.target.second;
+            wpe_input_dispatch_pointer_event(backend, &event);
         }
     },
     // axis
@@ -216,8 +219,8 @@ static const struct wl_pointer_listener g_pointerListener = {
         if (pointer.target.first) {
             struct wpe_input_axis_event event = { wpe_input_axis_event_type_motion, time, coords.first, coords.second, axis, -wl_fixed_to_int(value) };
 
-            struct wpe_view_backend* backend = pointer.target.second;
-            wpe_view_backend_dispatch_axis_event(backend, &event);
+            struct wpe_input* backend = pointer.target.second;
+            wpe_input_dispatch_axis_event(backend, &event);
         }
     },
 };
@@ -241,8 +244,8 @@ handleKeyEvent(Display::SeatData& seatData, uint32_t key, uint32_t state, uint32
     if (seatData.keyboard.target.first) {
         struct wpe_input_keyboard_event event = { time, keysym, unicode, !!state, xkb.modifiers };
 
-        struct wpe_view_backend* backend = seatData.keyboard.target.second;
-        wpe_view_backend_dispatch_keyboard_event(backend, &event);
+        struct wpe_input* backend = seatData.keyboard.target.second;
+        wpe_input_dispatch_keyboard_event(backend, &event);
     }
 }
 
@@ -399,8 +402,8 @@ static const struct wl_touch_listener g_touchListener = {
 
         struct wpe_input_touch_event event = { touchPoints.data(), touchPoints.size(), wpe_input_touch_event_type_down, id, time };
 
-        struct wpe_view_backend* backend = target.second;
-        wpe_view_backend_dispatch_touch_event(backend, &event);
+        struct wpe_input* backend = target.second;
+        wpe_input_dispatch_touch_event(backend, &event);
     },
     // up
     [](void* data, struct wl_touch*, uint32_t serial, uint32_t time, int32_t id)
@@ -421,8 +424,8 @@ static const struct wl_touch_listener g_touchListener = {
 
         struct wpe_input_touch_event event = { touchPoints.data(), touchPoints.size(), wpe_input_touch_event_type_up, id, time };
 
-        struct wpe_view_backend* backend = target.second;
-        wpe_view_backend_dispatch_touch_event(backend, &event);
+        struct wpe_input* backend = target.second;
+        wpe_input_dispatch_touch_event(backend, &event);
 
         point = { wpe_input_touch_event_type_null, 0, 0, 0, 0 };
         target = { nullptr, nullptr };
@@ -444,8 +447,8 @@ static const struct wl_touch_listener g_touchListener = {
 
         struct wpe_input_touch_event event = { touchPoints.data(), touchPoints.size(), wpe_input_touch_event_type_motion, id, time };
 
-        struct wpe_view_backend* backend = target.second;
-        wpe_view_backend_dispatch_touch_event(backend, &event);
+        struct wpe_input* backend = target.second;
+        wpe_input_dispatch_touch_event(backend, &event);
     },
     // frame
     [](void*, struct wl_touch*)
@@ -561,6 +564,8 @@ Display::~Display()
         wl_seat_destroy(m_interfaces.seat);
     if (m_interfaces.xdg)
         xdg_shell_destroy(m_interfaces.xdg);
+    if (m_interfaces.shell)
+        wl_shell_destroy(m_interfaces.shell);
     if (m_interfaces.ivi_application)
         ivi_application_destroy(m_interfaces.ivi_application);
     if (m_interfaces.shm)
@@ -595,7 +600,7 @@ Display::~Display()
     m_seatData = SeatData{ };
 }
 
-void Display::registerInputClient(struct wl_surface* surface, struct wpe_view_backend* client)
+void Display::registerInputClient(struct wl_surface* surface, struct wpe_input* client)
 {
 #ifndef NDEBUG
     auto result =

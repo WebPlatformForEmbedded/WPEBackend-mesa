@@ -1,11 +1,10 @@
-# - Try to find Wayland.
+# - Try to find Wayland EGL
 # Once done, this will define
 #
-#  WAYLAND_FOUND - system has Wayland.
-#  WAYLAND_INCLUDE_DIRS - the Wayland include directories
-#  WAYLAND_LIBRARIES - link these to use Wayland.
+#  WAYLAND_EGL_INCLUDE_DIRS - the gbm include directories
+#  WAYLAND_EGL_LIBRARIES - link these to use gbm.
 #
-# Copyright (C) 2014 Igalia S.L.
+# Copyright (C) 2017 Garmin International
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -29,13 +28,20 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 find_package(PkgConfig)
-pkg_check_modules(WAYLAND wayland-client wayland-server)
+pkg_check_modules(PC_WAYLAND_EGL wayland-egl)
+
+find_path(WAYLAND_EGL_INCLUDE_DIRS
+    NAMES wayland-egl.h
+    HINTS ${PC_WAYLAND_EGL_INCLUDE_DIRS} ${PC_WAYLAND_EGL_INCUDEDIR}
+)
+
+find_library(WAYLAND_EGL_LIBRARIES
+    NAMES ${PC_WAYLAND_EGL_LIBRARIES}
+    HINTS ${PC_WAYLAND_EGL_LIBRARY_DIRS} ${PC_WAYLAND_EGL_LIBDIR}
+)
 
 include(FindPackageHandleStandardArgs)
-FIND_PACKAGE_HANDLE_STANDARD_ARGS(WAYLAND DEFAULT_MSG WAYLAND_LIBRARIES)
+FIND_PACKAGE_HANDLE_STANDARD_ARGS(WAYLAND_EGL DEFAULT_MSG WAYLAND_EGL_LIBRARIES)
 
-find_program(WAYLAND_SCANNER_EXECUTABLE NAMES wayland-scanner)
+mark_as_advanced(WAYLAND_EGL_INCLUDE_DIRS WAYLAND_EGL_LIBRARIES)
 
-if(NOT WAYLAND_SCANNER_EXECUTABLE)
-    message(FATAL "The wayland-scanner executable has not been found on your system. You must install it.")
-endif()

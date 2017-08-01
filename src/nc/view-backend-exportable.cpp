@@ -297,6 +297,18 @@ static struct wpe_view_backend_interface exportable_view_backend_interface = {
     {
         return -1;
     },
+    // create_popup
+    [](void*, struct wpe_popup*, int32_t, int32_t) -> bool
+    {
+        return false;
+    },
+    // alloc_buffer
+    [](void*, struct wpe_buffer*, uint32_t, uint32_t, uint32_t) -> bool
+    {
+        return false;
+    },
+    nullptr, // get_display
+    nullptr, // get_surface
 };
 
 __attribute__((visibility("default")))
