@@ -10,6 +10,7 @@ option(WPE_MESA_EXPERIMENTAL_WAYLAND_EGL "Whether to enable support for the wayl
 
 option(WPE_MESA_DRM_TEGRA_SUPPORT "Whether to enable support for the Tegra-specific quirks in the DRM WPE backend" OFF)
 
+find_package(EGL REQUIRED)
 find_package(GLIB 2.40.0 REQUIRED COMPONENTS gio gio-unix gobject gthread gmodule)
 find_package(LibDRM REQUIRED)
 find_package(Libxkbcommon 0.4.0 REQUIRED)
@@ -17,6 +18,7 @@ find_package(Wayland 1.6.0 REQUIRED)
 find_package(WaylandCursor REQUIRED)
 add_definitions(-DWPE_BACKEND_DRM=1)
 add_definitions(-DWPE_BACKEND_WAYLAND=1)
+add_definitions(${EGL_DEFINITIONS})
 
 pkg_check_modules(WPE wpe REQUIRED)
 
@@ -27,6 +29,7 @@ set(WPE_MESA_INCLUDE_DIRECTORIES
     "src/util"
     "src/wayland"
     "src/wayland/protocols"
+    ${EGL_INCLUDE_DIRS}
     ${GIO_UNIX_INCLUDE_DIRS}
     ${GLIB_INCLUDE_DIRS}
     ${LIBXKBCOMMON_INCLUDE_DIRS}
@@ -35,6 +38,7 @@ set(WPE_MESA_INCLUDE_DIRECTORIES
     ${WPE_INCLUDE_DIRS}
 )
 set(WPE_MESA_LIBRARIES
+    ${EGL_LIBRARIES}
     ${GIO_UNIX_LIBRARIES}
     ${GLIB_LIBRARIES}
     ${LIBXKBCOMMON_LIBRARIES}
