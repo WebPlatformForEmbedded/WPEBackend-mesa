@@ -28,6 +28,7 @@
 
 #include "ivi-application-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
+#include "xdg-shell-unstable-v6-client-protocol.h"
 #include "wayland-drm-client-protocol.h"
 #include <cassert>
 #include <cstring>
@@ -117,6 +118,9 @@ const struct wl_registry_listener g_registryListener = {
         if (!std::strcmp(interface, "xdg_shell"))
             interfaces.xdg = static_cast<struct xdg_shell*>(wl_registry_bind(registry, name, &xdg_shell_interface, 1));
 
+        if (!std::strcmp(interface, "zxdg_shell_v6"))
+            interfaces.xdg_v6 = static_cast<struct zxdg_shell_v6*>(wl_registry_bind(registry, name, &zxdg_shell_v6_interface, 1));
+
         if (!std::strcmp(interface, "ivi_application"))
             interfaces.ivi_application = static_cast<struct ivi_application*>(wl_registry_bind(registry, name, &ivi_application_interface, 1));
 
@@ -132,6 +136,14 @@ static const struct xdg_shell_listener g_xdgShellListener = {
     [](void*, struct xdg_shell* shell, uint32_t serial)
     {
         xdg_shell_pong(shell, serial);
+    },
+};
+
+static const struct zxdg_shell_v6_listener g_xdg6ShellListener = {
+    // ping
+    [](void*, struct zxdg_shell_v6* shell, uint32_t serial)
+    {
+        zxdg_shell_v6_pong(shell, serial);
     },
 };
 
@@ -534,6 +546,9 @@ Display::Display()
         xdg_shell_use_unstable_version(m_interfaces.xdg, 5);
     }
 
+    if (m_interfaces.xdg_v6)
+        zxdg_shell_v6_add_listener(m_interfaces.xdg_v6, &g_xdg6ShellListener, nullptr);
+
     wl_seat_add_listener(m_interfaces.seat, &g_seatListener, &m_seatData);
 
     m_seatData.xkb.context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
@@ -561,6 +576,8 @@ Display::~Display()
         wl_seat_destroy(m_interfaces.seat);
     if (m_interfaces.xdg)
         xdg_shell_destroy(m_interfaces.xdg);
+    if (m_interfaces.xdg_v6)
+        zxdg_shell_v6_destroy(m_interfaces.xdg_v6);
     if (m_interfaces.ivi_application)
         ivi_application_destroy(m_interfaces.ivi_application);
     if (m_interfaces.shm)
