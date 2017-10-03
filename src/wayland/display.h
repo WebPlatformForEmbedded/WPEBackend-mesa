@@ -50,6 +50,7 @@ struct wl_shm;
 struct wl_surface;
 struct wl_touch;
 struct xdg_shell;
+struct zxdg_shell_v6;
 
 typedef struct _GSource GSource;
 
@@ -72,6 +73,7 @@ public:
         uint32_t drm_version;
         struct wl_seat* seat;
         struct xdg_shell* xdg;
+        struct zxdg_shell_v6* xdg_v6;
         struct ivi_application* ivi_application;
         struct wl_shm* shm;
     };

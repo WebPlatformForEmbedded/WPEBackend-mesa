@@ -13,7 +13,7 @@ option(WPE_MESA_DRM_TEGRA_SUPPORT "Whether to enable support for the Tegra-speci
 find_package(GLIB 2.40.0 REQUIRED COMPONENTS gio gio-unix gobject gthread gmodule)
 find_package(LibDRM REQUIRED)
 find_package(Libxkbcommon 0.4.0 REQUIRED)
-find_package(Wayland 1.6.0 REQUIRED)
+find_package(Wayland 1.10.0 REQUIRED)
 find_package(WaylandCursor REQUIRED)
 add_definitions(-DWPE_BACKEND_DRM=1)
 add_definitions(-DWPE_BACKEND_WAYLAND=1)
@@ -55,6 +55,7 @@ set(WPE_MESA_SOURCES
     src/wayland/protocols/ivi-application-protocol.c
     src/wayland/protocols/wayland-drm-protocol.c
     src/wayland/protocols/xdg-shell-protocol.c
+    src/wayland/protocols/xdg-shell-unstable-v6-protocol.c
 )
 
 if (WPE_MESA_GBM)

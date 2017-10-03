@@ -32,6 +32,7 @@
 #include "ivi-application-client-protocol.h"
 #include "wayland-drm-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
+#include "xdg-shell-unstable-v6-client-protocol.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
@@ -76,6 +77,8 @@ private:
 
     struct wl_surface* m_surface;
     struct xdg_surface* m_xdgSurface { nullptr };
+    struct zxdg_surface_v6* m_xdg6Surface { nullptr };
+    struct zxdg_toplevel_v6* m_toplevelSurface { nullptr };
     struct ivi_surface* m_iviSurface { nullptr };
 
     BufferListenerData m_bufferData { nullptr, decltype(m_bufferData.map){ } };
@@ -100,6 +103,27 @@ static const struct xdg_surface_listener g_xdgSurfaceListener = {
     },
     // delete
     [](void*, struct xdg_surface*) { },
+};
+
+static const struct zxdg_surface_v6_listener g_xdg6SurfaceListener = {
+    // configure
+    [](void* data, struct zxdg_surface_v6* surface, uint32_t serial)
+    {
+        zxdg_surface_v6_ack_configure(surface, serial);
+    },
+};
+
+static const struct zxdg_toplevel_v6_listener g_toplevelSurfaceListener = {
+    // configure
+    [](void* data, struct zxdg_toplevel_v6*, int32_t width, int32_t height, struct wl_array*)
+    {
+        if( width != 0 || height != 0 ) {
+            struct wpe_view_backend* backend = static_cast<ViewBackend::ResizingData*>(data)->backend;
+            wpe_view_backend_dispatch_set_size(backend, std::max(0, width), std::max(0, height));
+        }
+    },
+    // close
+    [](void *data, struct zxdg_toplevel_v6 *) { },
 };
 
 static const struct ivi_surface_listener g_iviSurfaceListener = {
@@ -163,6 +187,18 @@ ViewBackend::ViewBackend(struct wpe_view_backend* backend)
         xdg_surface_set_title(m_xdgSurface, "WPE");
     }
 
+    if (m_display.interfaces().xdg_v6) {
+        m_xdg6Surface = zxdg_shell_v6_get_xdg_surface(m_display.interfaces().xdg_v6, m_surface);
+        zxdg_surface_v6_add_listener(m_xdg6Surface, &g_xdg6SurfaceListener, nullptr);
+
+        m_toplevelSurface = zxdg_surface_v6_get_toplevel(m_xdg6Surface);
+        if (m_toplevelSurface) {
+            zxdg_toplevel_v6_add_listener(m_toplevelSurface, &g_toplevelSurfaceListener, &m_resizingData);
+            zxdg_toplevel_v6_set_title(m_toplevelSurface, "WPE");
+            wl_surface_commit(m_surface);
+        }
+    }
+
     if (m_display.interfaces().ivi_application) {
         m_iviSurface = ivi_application_surface_create(m_display.interfaces().ivi_application,
             4200 + getpid(), // a unique identifier
@@ -201,6 +237,12 @@ ViewBackend::~ViewBackend()
     if (m_xdgSurface)
         xdg_surface_destroy(m_xdgSurface);
     m_xdgSurface = nullptr;
+    if (m_toplevelSurface)
+        zxdg_toplevel_v6_destroy(m_toplevelSurface);
+    m_toplevelSurface = nullptr;
+    if (m_xdg6Surface)
+        zxdg_surface_v6_destroy(m_xdg6Surface);
+    m_xdg6Surface = nullptr;
     if (m_surface)
         wl_surface_destroy(m_surface);
     m_surface = nullptr;
