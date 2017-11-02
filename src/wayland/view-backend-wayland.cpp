@@ -181,29 +181,28 @@ ViewBackend::ViewBackend(struct wpe_view_backend* backend)
 
     m_surface = wl_compositor_create_surface(m_display.interfaces().compositor);
 
-    if (m_display.interfaces().xdg) {
-        m_xdgSurface = xdg_shell_get_xdg_surface(m_display.interfaces().xdg, m_surface);
-        xdg_surface_add_listener(m_xdgSurface, &g_xdgSurfaceListener, &m_resizingData);
-        xdg_surface_set_title(m_xdgSurface, "WPE");
-    }
-
-    if (m_display.interfaces().xdg_v6) {
+    // In case that more than one protocol is available pick the first that matches.
+    // Priority is: IVI -> xdg_v6 > xdg
+    if (m_display.interfaces().ivi_application) {
+        m_iviSurface = ivi_application_surface_create(m_display.interfaces().ivi_application,
+            4200 + getpid(), // a unique identifier
+            m_surface);
+        ivi_surface_add_listener(m_iviSurface, &g_iviSurfaceListener, &m_resizingData);
+    } else if (m_display.interfaces().xdg_v6) {
         m_xdg6Surface = zxdg_shell_v6_get_xdg_surface(m_display.interfaces().xdg_v6, m_surface);
         zxdg_surface_v6_add_listener(m_xdg6Surface, &g_xdg6SurfaceListener, nullptr);
-
         m_toplevelSurface = zxdg_surface_v6_get_toplevel(m_xdg6Surface);
         if (m_toplevelSurface) {
             zxdg_toplevel_v6_add_listener(m_toplevelSurface, &g_toplevelSurfaceListener, &m_resizingData);
             zxdg_toplevel_v6_set_title(m_toplevelSurface, "WPE");
             wl_surface_commit(m_surface);
         }
-    }
-
-    if (m_display.interfaces().ivi_application) {
-        m_iviSurface = ivi_application_surface_create(m_display.interfaces().ivi_application,
-            4200 + getpid(), // a unique identifier
-            m_surface);
-        ivi_surface_add_listener(m_iviSurface, &g_iviSurfaceListener, &m_resizingData);
+    } else if (m_display.interfaces().xdg) {
+        m_xdgSurface = xdg_shell_get_xdg_surface(m_display.interfaces().xdg, m_surface);
+        xdg_surface_add_listener(m_xdgSurface, &g_xdgSurfaceListener, &m_resizingData);
+        xdg_surface_set_title(m_xdgSurface, "WPE");
+    } else {
+        fprintf(stderr, "ERROR: Unknown XDG-Shell protocol.\n");
     }
 
     // Ensure the Pasteboard singleton is constructed early.
