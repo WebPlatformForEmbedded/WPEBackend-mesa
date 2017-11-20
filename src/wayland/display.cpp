@@ -587,9 +587,6 @@ Display::~Display()
     if (m_registry)
         wl_registry_destroy(m_registry);
     m_registry = nullptr;
-    if (m_display)
-        wl_display_disconnect(m_display);
-    m_display = nullptr;
 
     if (m_seatData.pointer.object)
         wl_pointer_destroy(m_seatData.pointer.object);
@@ -610,6 +607,10 @@ Display::~Display()
     if (m_seatData.repeatData.eventSource)
         g_source_remove(m_seatData.repeatData.eventSource);
     m_seatData = SeatData{ };
+
+    if (m_display)
+        wl_display_disconnect(m_display);
+    m_display = nullptr;
 }
 
 void Display::registerInputClient(struct wl_surface* surface, struct wpe_view_backend* client)
