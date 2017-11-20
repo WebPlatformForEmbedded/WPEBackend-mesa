@@ -483,7 +483,7 @@ static const struct wl_seat_listener g_seatListener = {
             wl_pointer_add_listener(seatData.pointer.object, &g_pointerListener, &seatData);
         }
         if (!hasPointerCap && seatData.pointer.object) {
-            wl_pointer_destroy(seatData.pointer.object);
+            wl_pointer_release(seatData.pointer.object);
             seatData.pointer.object = nullptr;
         }
 
@@ -494,7 +494,7 @@ static const struct wl_seat_listener g_seatListener = {
             wl_keyboard_add_listener(seatData.keyboard.object, &g_keyboardListener, &seatData);
         }
         if (!hasKeyboardCap && seatData.keyboard.object) {
-            wl_keyboard_destroy(seatData.keyboard.object);
+            wl_keyboard_release(seatData.keyboard.object);
             seatData.keyboard.object = nullptr;
         }
 
@@ -505,7 +505,7 @@ static const struct wl_seat_listener g_seatListener = {
             wl_touch_add_listener(seatData.touch.object, &g_touchListener, &seatData);
         }
         if (!hasTouchCap && seatData.touch.object) {
-            wl_touch_destroy(seatData.touch.object);
+            wl_touch_release(seatData.touch.object);
             seatData.touch.object = nullptr;
         }
     },
@@ -587,16 +587,13 @@ Display::~Display()
     if (m_registry)
         wl_registry_destroy(m_registry);
     m_registry = nullptr;
-    if (m_display)
-        wl_display_disconnect(m_display);
-    m_display = nullptr;
 
     if (m_seatData.pointer.object)
-        wl_pointer_destroy(m_seatData.pointer.object);
+        wl_pointer_release(m_seatData.pointer.object);
     if (m_seatData.keyboard.object)
-        wl_keyboard_destroy(m_seatData.keyboard.object);
+        wl_keyboard_release(m_seatData.keyboard.object);
     if (m_seatData.touch.object)
-        wl_touch_destroy(m_seatData.touch.object);
+        wl_touch_release(m_seatData.touch.object);
     if (m_seatData.xkb.context)
         xkb_context_unref(m_seatData.xkb.context);
     if (m_seatData.xkb.keymap)
@@ -610,6 +607,10 @@ Display::~Display()
     if (m_seatData.repeatData.eventSource)
         g_source_remove(m_seatData.repeatData.eventSource);
     m_seatData = SeatData{ };
+
+    if (m_display)
+        wl_display_disconnect(m_display);
+    m_display = nullptr;
 }
 
 void Display::registerInputClient(struct wl_surface* surface, struct wpe_view_backend* client)
