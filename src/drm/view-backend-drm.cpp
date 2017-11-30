@@ -287,8 +287,10 @@ ViewBackend::~ViewBackend()
     m_renderer.ipcHost.deinitialize();
 
     m_display.fbMap = { };
-    if (m_display.source)
+    if (m_display.source) {
+        g_source_destroy(m_display.source);
         g_source_unref(m_display.source);
+    }
     m_display.source = nullptr;
     m_display.pageFlipData = { nullptr, { }, { } };
 

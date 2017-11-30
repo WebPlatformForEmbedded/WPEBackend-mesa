@@ -82,8 +82,10 @@ RendererHost::RendererHost()
 
 RendererHost::~RendererHost()
 {
-    if (m_source)
+    if (m_source) {
+        g_source_destroy(m_source);
         g_source_unref(m_source);
+    }
 
     if (m_display)
         wl_display_destroy(m_display);

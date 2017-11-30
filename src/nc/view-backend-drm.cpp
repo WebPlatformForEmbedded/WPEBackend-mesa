@@ -534,8 +534,10 @@ ViewBackend::ViewBackend(struct wpe_view_backend* backend)
 
 ViewBackend::~ViewBackend()
 {
-    if (m_display.source)
+    if (m_display.source) {
+        g_source_destroy(m_display.source);
         g_source_unref(m_display.source);
+    }
     m_display.source = nullptr;
 
     if (m_gbm.device)
