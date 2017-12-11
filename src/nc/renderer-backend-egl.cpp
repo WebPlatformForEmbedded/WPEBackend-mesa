@@ -151,8 +151,10 @@ Backend::Backend(int hostFd)
 
 Backend::~Backend()
 {
-    if (m_source)
+    if (m_source) {
+        g_source_destroy(m_source);
         g_source_unref(m_source);
+    }
 }
 
 struct wl_surface* Backend::createSurface() const
