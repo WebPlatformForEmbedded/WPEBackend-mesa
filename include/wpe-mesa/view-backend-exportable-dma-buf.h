@@ -31,7 +31,7 @@
 extern "C" {
 #endif
 
-#include <wpe/view-backend.h>
+#include <wpe/wpe.h>
 
 struct wpe_mesa_view_backend_exportable_dma_buf;
 

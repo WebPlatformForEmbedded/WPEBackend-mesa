@@ -27,7 +27,7 @@
 #ifndef wpe_mesa_input_libxkbcommon_h
 #define wpe_mesa_input_libxkbcommon_h
 
-#include <wpe/input.h>
+#include <wpe/wpe.h>
 
 #ifdef __cplusplus
 extern "C" {

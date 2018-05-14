@@ -24,7 +24,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <wpe/loader.h>
+#include <wpe/wpe.h>
 
 #include "input-libxkbcommon.h"
 #include "pasteboard-wayland.h"

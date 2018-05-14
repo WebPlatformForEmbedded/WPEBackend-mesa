@@ -27,7 +27,7 @@
 #ifndef wpe_view_backend_wayland_h
 #define wpe_view_backend_wayland_h
 
-#include <wpe/view-backend.h>
+#include <wpe/wpe.h>
 
 #ifdef __cplusplus
 extern "C" {

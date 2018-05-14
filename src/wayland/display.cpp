@@ -40,8 +40,7 @@
 #include <unistd.h>
 #include <wayland-client.h>
 #include <wayland-cursor.h>
-#include <wpe/input.h>
-#include <wpe/view-backend.h>
+#include <wpe/wpe.h>
 
 namespace Wayland {
 

@@ -20,7 +20,7 @@ add_definitions(-DWPE_BACKEND_DRM=1)
 add_definitions(-DWPE_BACKEND_WAYLAND=1)
 add_definitions(${EGL_DEFINITIONS})
 
-pkg_check_modules(WPE wpe REQUIRED)
+pkg_check_modules(WPE wpe-0.1 REQUIRED)
 
 set(WPE_MESA_INCLUDE_DIRECTORIES
     "src/drm"

@@ -29,9 +29,8 @@
 
 #define WL_EGL_PLATFORM
 
-#include <wpe/renderer-backend-egl.h>
-#include <wpe/renderer-host.h>
-#include <wpe/view-backend.h>
+#include <wpe/wpe-egl.h>
+#include <wpe/wpe.h>
 
 #ifdef __cplusplus
 extern "C" {

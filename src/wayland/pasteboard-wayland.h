@@ -27,7 +27,7 @@
 #ifndef wpe_pasteboard_wayland_h
 #define wpe_pasteboard_wayland_h
 
-#include <wpe/pasteboard.h>
+#include <wpe/wpe.h>
 
 #ifdef __cplusplus
 extern "C" {

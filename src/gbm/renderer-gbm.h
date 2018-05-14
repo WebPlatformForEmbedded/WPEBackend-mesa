@@ -29,8 +29,8 @@
 
 #define __GBM__
 
-#include <wpe/renderer-backend-egl.h>
-#include <wpe/renderer-host.h>
+#include <wpe/wpe-egl.h>
+#include <wpe/wpe.h>
 
 #ifdef __cplusplus
 extern "C" {

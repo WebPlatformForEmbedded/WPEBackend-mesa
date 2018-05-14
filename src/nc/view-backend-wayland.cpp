@@ -44,7 +44,7 @@
 #include <wayland-server-core.h>
 #include "wayland-drm-server-protocol.h"
 #include <wayland-server-protocol.h>
-#include <wpe/view-backend.h>
+#include <wpe/wpe.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 
